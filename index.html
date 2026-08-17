@@ -859,14 +859,24 @@ function rXflr5(){
     <ol>
       <li><b>安裝</b>：<a href="https://www.xflr5.tech" target="_blank">xflr5.tech</a> 免費下載。</li>
       <li><b>翼型極線</b>：File &gt; Direct Foil Analysis → 載入主翼/尾翼翼型（.dat 或 NACA 產生器）→
-        Analysis &gt; Batch Analysis，Re 範圍抓 <code>50,000 ~ 300,000</code>（要涵蓋你的 ${reTxt}）。</li>
+        Analysis &gt; Batch Analysis，Re 範圍抓 <code>50,000 ~ 300,000</code>（要涵蓋你的 ${reTxt}）。
+        <br><span style="color:var(--ink2)">「極線」＝翼型的成績單：在某個雷諾數下把攻角從小掃到大，
+        記錄每個攻角的升力係數 Cl、阻力係數 Cd、力矩係數 Cm。之後 xflr5 算整機，就是拿這些
+        成績單去組合——所以雷諾數範圍一定要涵蓋你實際飛的 Re，否則等於拿別人的成績單抄。</span></li>
       <li><b>畫全機</b>：File &gt; Wing and Plane Design → Plane &gt; Define a New Plane，
         照本精靈的尺寸填（主翼/尾翼幾何在各步、位置在「機身佈局」步的 📍 都有）。</li>
       <li><b>設重量重心</b>：右鍵 Plane &gt; Define Inertia，總質量 ${i.mtow} g、
         重心 X＝距主翼前緣 ${xcgMM} mm。</li>
-      <li><b>跑分析</b>：Define an Analysis（Type 1 固定速度 ${i.v} m/s）→ α 掃 −5°~12°，看四張圖：
-        <b>Cm vs α</b> 在巡航攻角附近過零；<b>Cl vs α</b> 在 α=0 時 &gt;0；
-        <b>Cl/Cd vs α</b> 峰值在巡航攻角附近；<b>Cm vs Cl</b> 斜率為負（自穩定）。</li>
+      <li><b>跑分析</b>：Define an Analysis（Type 1 固定速度 ${i.v} m/s）→ α 掃 <code>−20° ~ 20°</code>
+        （失速角之後的區段 xflr5 不準，參考就好）。<b>四張圖照這個順序看</b>：
+        <ol style="margin:.2rem 0 .2rem 1rem">
+          <li><b>Cl vs α</b>——先確認「會飛」：α=0 時 Cl 要 &gt;0，並看清楚失速在幾度。</li>
+          <li><b>Cl/Cd vs α</b>——找出<b>巡航攻角</b>：峰值（升阻比最好）附近就是你該巡航的攻角。</li>
+          <li><b>Cm vs α</b>——檢查「配平點」：Cm=0 的過零攻角要落在上一步找到的巡航攻角附近；
+            偏了就回精靈調裝置角（見下面迭代清單）。</li>
+          <li><b>Cm vs Cl</b>——檢查「自穩定」：斜率為負（升力越大越低頭）才會自己回穩。</li>
+        </ol>
+        口訣：<b>先找到想飛的攻角（1、2），再確認飛機願意停在那裡（3），最後確認被吹歪會自己回來（4）。</b></li>
       <li><b>讀 XNP</b>：跑 Stability analysis（Type 7），或看 Polar 資料裡的 Neutral Point——
         換算成「距主翼前緣的弦長比」填回下面。</li>
     </ol></details>
