@@ -580,7 +580,7 @@ function rTail(){
   </div>
   <div class="field"><label>尾翼構型</label>
     <select id="f_vtype" onchange="state.vtype=this.value;refreshLive()">
-      <option value="conventional" ${state.vtype!=="V"?"selected":""}>傳統十字尾（垂尾要自己手動建）</option>
+      <option value="conventional" ${state.vtype!=="V"?"selected":""}>傳統十字尾（垂尾也自動生成）</option>
       <option value="V" ${state.vtype==="V"?"selected":""}>V 型尾（Fusion 全自動生成）</option>
     </select>
     <div class="hint">V 尾夾角與面積由公式自動換算（NACA R-823 法＋7.5% 補償）。</div></div>
@@ -614,7 +614,7 @@ function rFinal(){
       <li><b>實體 &gt; 建立 &gt; 從表格生成</b> → 選你的 xlsx → 看預覽 → 確定。</li>
       <li>主翼＋水平尾就長出來了，每支都能用 <b>修改 &gt; Edit Wing</b> 再調（先點選特徵）。</li>
       <li id="datHint"></li>
-      <li>傳統十字尾的<b>垂直尾翼</b>要自己建：訊息框會給你根弦/梢弦/高度，畫正面草圖拉伸即可（V 尾構型則全自動）。</li>
+      <li>垂直尾翼也會自動生成（十字尾＝直立翼、V 尾＝斜翼），整台機一次到位。</li>
     </ol>
   </div></div>`;
 }
