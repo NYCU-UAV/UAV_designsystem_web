@@ -85,5 +85,17 @@
   "aoaCruise": 5,
   "note": "超高升力（載重挑戰用）；阻力大、需下載 .dat",
   "url": "http://airfoiltools.com/airfoil/details?airfoil=s1223-il"
+ },
+ {
+  "name": "S1020",
+  "dat": "s1020.dat",
+  "have": true,
+  "cls": [],
+  "clmax": 1.2,
+  "clCruise": 0.7,
+  "aoaStall": null,
+  "aoaCruise": null,
+  "note": "Selig 撲翼機翼型（低雷諾數）；係數為初估，請依極線校正",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=s1020-il"
  }
 ]
