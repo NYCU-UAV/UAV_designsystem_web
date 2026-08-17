@@ -572,8 +572,67 @@ function buildXflr5Xml(i,o,name){
 `;
 }
 
+/* ---------- xflr5 分析定義 XML（Analysis > Import analysis from xml file） ----------
+   格式依 xflr5 v6 官方原始碼（xmlwpolarwriter/reader.cpp、miarex.cpp、
+   wpolardlg.cpp）查證，避開三個已知 reader bug：
+   1. Use_Plane_Inertia=true —— 繞過 <CoG> 分隔符不一致（writer 寫空白、
+      reader 用逗號 split）與 CoG_Ixz 讀取的 dead code；質量/重心/慣性矩
+      全部由 plane XML 的 <Inertia> 算出。
+   2. VLM2 要寫 Method=PANELMETHOD + Thin_Surfaces=true + Use_VLM1=false，
+      不是 VLMMETHOD（那是現行 GUI 不再產生的 legacy enum）。
+   3. Reference_Dimensions 寫 PROJECTEDREFDIM 讓 xflr5 自己從幾何重算參考
+      尺寸（非 MANUALREFDIM 時 XML 裡的值本來就會被覆寫）。
+   Plane_Name 對不上時 xflr5 會自動掛到當前飛機，所以先匯入 plane 再匯入
+   analysis 一定接得上。α 掃描範圍不在此 XML（原始碼層級不存在該欄位）。 */
+function buildXflr5AnalysisXml(i,o,planeName){
+  const E=xmlEsc, f=(v,d)=>Number(v).toFixed(d===undefined?5:d);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Plane_Polar>
+<Plane_Polar version="1.0">
+    <Units>
+        <length_unit_to_meter>1</length_unit_to_meter>
+        <area_unit_to_m2>1</area_unit_to_m2>
+        <mass_unit_to_kg>1</mass_unit_to_kg>
+        <speed_unit_to_ms>1</speed_unit_to_ms>
+        <inertia_unit_to_kgm2>1</inertia_unit_to_kgm2>
+    </Units>
+    <Polar>
+        <Polar_Name>T1-${f(i.v,1)}ms-VLM2</Polar_Name>
+        <Plane_Name>${E(planeName)}</Plane_Name>
+        <Type>FIXEDSPEEDPOLAR</Type>
+        <Method>PANELMETHOD</Method>
+        <Use_VLM1>false</Use_VLM1>
+        <Thin_Surfaces>true</Thin_Surfaces>
+        <Viscous_Analysis>true</Viscous_Analysis>
+        <Ignore_Body_Panels>true</Ignore_Body_Panels>
+        <Tilted_Analysis>false</Tilted_Analysis>
+        <Ground_Effect>false</Ground_Effect>
+        <Ground_Height>0.00000</Ground_Height>
+        <Viscosity>1.5e-05</Viscosity>
+        <Density>1.22500</Density>
+        <Fixed_Velocity>${f(i.v)}</Fixed_Velocity>
+        <Fixed_AOA>0.00000</Fixed_AOA>
+        <Fixed_Bank_Angle>0.00000</Fixed_Bank_Angle>
+        <Fixed_SideSlip>0.00000</Fixed_SideSlip>
+        <Reference_Dimensions>PROJECTEDREFDIM</Reference_Dimensions>
+        <Reference_Area>${f(o.S)}</Reference_Area>
+        <Reference_Span_Length>${f(o.bproj)}</Reference_Span_Length>
+        <Reference_Chord_Length>${f(o.mac/1000)}</Reference_Chord_Length>
+        <Use_Plane_Inertia>true</Use_Plane_Inertia>
+    </Polar>
+</Plane_Polar>
+`;
+}
+
+/* ---------- α 掃描範圍：不在 XML 裡，是 xflr5 的全域 GUI 狀態，
+   存在 %APPDATA%\XFLR5.ini 的 [Miarex] 段。產一份片段讓使用者貼上，
+   貼完開 xflr5 就真的只剩按 Analyze。 ---------- */
+function buildXflr5IniSnippet(){
+  return "[Miarex]\nSequence=true\nAlphaMin=-20\nAlphaMax=20\nAlphaDelta=0.5\n";
+}
+
 /* node 測試掛鉤 */
-if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,PRESETS,FOILS,allFoils};}
+if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,buildXflr5AnalysisXml,buildXflr5IniSnippet,PRESETS,FOILS,allFoils};}
 </script>
 
 <!-- ======================= UI 區 ======================= -->
@@ -606,7 +665,11 @@ const FOILS_JSON_EDIT_URL =
 // 內容則會停在舊版——用 GITHUB_TOKEN 推的 commit 不會觸發 Pages 重建
 // （實測機器人上傳的翼型在 Pages 上永遠看不到）。最後才退回內建清單。
 const FOILS_SOURCES=[
+  // jsDelivr CDN：不限流、commit 後數分鐘內更新、有 CORS。首選。
+  "https://cdn.jsdelivr.net/gh/NYCU-UAV/UAV_designsystem_web@main/foils.json",
+  // raw：即時但對未認證請求限流（實測整台機器被 429 擋掉），當後備。
   "https://raw.githubusercontent.com/NYCU-UAV/UAV_designsystem_web/main/foils.json",
+  // 同源（Pages）：對機器人的 commit 不會更新，敬陪末座。
   "foils.json",
 ];
 (async()=>{
@@ -988,17 +1051,28 @@ function rXflr5(){
         <br><span style="color:var(--ink2)">「極線」＝翼型的成績單：在某個雷諾數下把攻角從小掃到大，
         記錄每個攻角的升力係數 Cl、阻力係數 Cd、力矩係數 Cm。之後 xflr5 算整機，就是拿這些
         成績單去組合——所以雷諾數範圍一定要涵蓋你實際飛的 Re，否則等於拿別人的成績單抄。</span></li>
-      <li><b>匯入全機（免手畫）</b>：按
-        <button class="btn" style="font-size:.85rem;padding:.15rem .7rem" onclick="doGenXml()">⬇ 下載 xflr5 飛機檔 (.xml)</button>
-        → xflr5 的 File &gt; Wing and Plane Design → <b>Plane &gt; Import Plane(s) from xml file(s)</b>
-        選這個檔——主翼/尾翼幾何、位置、重量重心（${i.mtow} g @ 距主翼前緣 ${xcgMM} mm）全部自動帶入。
+      <li><b>匯入全機＋分析設定（兩個檔都免手填）</b>：按
+        <button class="btn" style="font-size:.85rem;padding:.15rem .7rem" onclick="doGenXml()">⬇ 下載 xflr5 兩個 xml</button>
+        會拿到 <code>_plane.xml</code> 與 <code>_analysis.xml</code>，到 xflr5 的
+        File &gt; Wing and Plane Design 後依序：
+        <br>① <b>Plane &gt; Import Plane(s) from xml file(s)</b> 選 <code>_plane.xml</code>
+        ——幾何、位置、重量重心（${i.mtow} g @ 距主翼前緣 ${xcgMM} mm）全帶入
+        <br>② <b>Analysis &gt; Import analysis from xml file</b> 選 <code>_analysis.xml</code>
+        ——Type 1 固定速度 ${i.v} m/s、VLM2、含黏性全設定好，Analyze 按鈕立刻可按
         <br><span style="color:var(--ink2)">⚠ 翼型名稱必須<b>一字不差（含大小寫與空格）</b>：xflr5 匯入時
         不會檢查也不會報錯，找不到同名翼型會靜默變成平板、分析結果全錯。
         本檔用的名稱是 <code>${E(foilName)}</code> 與 <code>${E(TAIL_FOIL.name)}</code>——
         先在第 2 步把這兩個翼型載進 Direct Foil Design（.dat 檔頭第一行就是 xflr5 認的名稱，
         必要時在 xflr5 裡改名對齊）。想手畫也可以，尺寸在各步、位置在「機身佈局」的 📍。</span></li>
-      <li><b>跑分析</b>：Define an Analysis（Type 1 固定速度 ${i.v} m/s）→ α 掃 <code>−20° ~ 20°</code>
-        （失速角之後的區段 xflr5 不準，參考就好）。<b>四張圖照這個順序看</b>：
+      <li><b>跑分析</b>：上一步匯入分析定義後，畫面右側把 α 填 <code>−20 / 20 / 0.5</code>
+        （失速角之後的區段 xflr5 不準，參考就好）→ 按 <b>Analyze</b>。
+        <br><span style="color:var(--ink2)">α 範圍是 xflr5 的全域設定、存在
+        <code>%APPDATA%\\XFLR5.ini</code>，不能寫進 xml。想連這三個數字都免填：
+        關掉 xflr5 → 按
+        <button class="btn" style="font-size:.8rem;padding:.1rem .5rem" onclick="doGenIni()">⬇ α 範圍設定片段</button>
+        → 把內容貼進 <code>%APPDATA%\\XFLR5.ini</code> 的 <code>[Miarex]</code> 段（同名的就取代）
+        → 重開 xflr5，之後<b>真的只剩按 Analyze</b>。</span>
+        <b>四張圖照這個順序看</b>：
         <ol style="margin:.2rem 0 .2rem 1rem">
           <li><b>Cm vs Cl</b>——先確認「自穩定」：斜率為負（升力越大越低頭）才會自己回穩。
             這關不過，後面看什麼都沒意義——回精靈調重心/尾翼。</li>
@@ -1064,14 +1138,22 @@ function renderFinalTable(){
   $("#finalTable").innerHTML=`<table class="check">`+cs.map(c=>
     `<tr><td>${c[1]}</td><td class="v-${c[0]}">${c[2]}</td><td class="v-${c[0]}">${c[0]==="ok"?"✓":"⚠"}</td><td>${c[3]}</td></tr>`).join("")+`</table>`;
 }
+function dl(text,fname,mime){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:mime||"text/plain"}));
+  a.download=fname; a.click(); URL.revokeObjectURL(a.href);
+}
 function doGenXml(){
   const i=inputs(),o=compute(i);
   const name=(state._fname||"design").replace(/[\\/:*?"<>|]/g,"");
-  const xml=buildXflr5Xml(i,o,name);
-  const blob=new Blob([xml],{type:"application/xml"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob); a.download=name+"_xflr5.xml"; a.click();
-  URL.revokeObjectURL(a.href);
+  dl(buildXflr5Xml(i,o,name), name+"_plane.xml", "application/xml");
+  // 分開下載避免瀏覽器把第二個當快顯擋掉
+  setTimeout(()=>dl(buildXflr5AnalysisXml(i,o,name), name+"_analysis.xml",
+    "application/xml"), 400);
+  const box=$("#xflr5Done"); if(box) box.classList.remove("hidden");
+}
+function doGenIni(){
+  dl(buildXflr5IniSnippet(), "XFLR5_alpha_range.txt", "text/plain");
 }
 function doGenerate(){
   const i=inputs(),o=compute(i);
