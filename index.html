@@ -742,15 +742,21 @@ function rFoil(){
   </div>`:""}
   <div id="newFoilForm" class="hidden" style="border:1.5px dashed var(--blue);border-radius:.5rem;padding:.7rem .8rem;margin:.5rem 0;background:#eef2f6">
     <b>新增自訂翼型</b>
-    <div class="hint" style="margin-bottom:.5rem">① 到 <a href="http://airfoiltools.com" target="_blank">airfoiltools</a> 找到翼型
-    → 下載 <b>Selig format dat file</b> → 放進 <code>wingforge/airfoils/</code> 資料夾；
-    ② 下面填「一樣的檔名」＋從極線圖讀出的兩個係數（讀法見上面教學）。NACA 四位數（如 NACA 3412）免檔案，檔名留空即可。</div>
+    <div class="hint" style="margin-bottom:.5rem"><b>最省事：直接貼 airfoiltools 網址</b>——不用下載任何檔案，
+    上傳時機器人會自己去抓座標、Fusion 匯入時也會自動下載。
+    （沒網路或自己畫的翼型才用下面的「選 .dat 檔」；NACA 四位數如 NACA 3412 兩者都免。）</div>
+    <div class="field"><label>① 貼 airfoiltools 翼型網址</label>
+      <input type="text" id="nf_url" style="max-width:32rem"
+        placeholder="http://airfoiltools.com/airfoil/details?airfoil=oa206-il"
+        oninput="parseFoilUrl(this.value)">
+      <div class="hint" id="nf_urlmsg">在 <a href="http://airfoiltools.com" target="_blank">airfoiltools</a>
+        搜到翼型後，把網址列整條複製過來即可</div></div>
     <div class="grid2">
       <div class="field"><label>翼型名稱</label><input type="text" id="nf_name" placeholder="例：S3021"></div>
-      <div class="field"><label>選擇 .dat 檔</label>
+      <div class="field"><label>② 或選 .dat 檔（貼了網址就不用）</label>
         <input type="file" id="nf_file" accept=".dat,.txt" onchange="readFoilFile(this)">
-        <div class="hint">選了檔就自動帶檔名與座標內容，上傳時免手貼；NACA 四位數不用選檔</div></div>
-      <div class="field"><label>dat 檔名（放在 airfoils/ 內）</label><input type="text" id="nf_dat" placeholder="例：s3021.dat；NACA 四位數留空"></div>
+        <div class="hint">選了檔就自動帶檔名、座標與正式名稱</div></div>
+      <div class="field"><label>dat 檔名（自動填）</label><input type="text" id="nf_dat" placeholder="例：s3021.dat；NACA 四位數留空"></div>
       <div class="field"><label>CLmax</label><input type="number" id="nf_clmax" value="1.2" step="0.05"></div>
       <div class="field"><label>巡航 CL</label><input type="number" id="nf_clc" value="0.7" step="0.05"></div>
     </div>
@@ -783,15 +789,19 @@ function addFoil(){
   if(!name){alert("翼型名稱必填");return}
   if(allFoils(state.customFoils).some(f=>f.name===name)){alert("這個名稱已存在");return}
   const isNaca=/^NACA\s*\d{4}$/i.test(name);
-  if(!isNaca && !dat){alert("非 NACA 四位數需要填 dat 檔名（並把檔案放進 airfoils/）");return}
+  const srcUrl=state._nfUrl||"";
+  if(!isNaca && !dat && !srcUrl){
+    alert("請三選一：貼 airfoiltools 網址、選 .dat 檔、或用 NACA 四位數命名");return}
   if(isNaca) dat="";
-  const nf={name, dat, have:false, custom:true, cls:[],
+  const nf={name, dat, have:false, custom:true, cls:[], url:srcUrl,
     clmax:clmax||1.2, clCruise:clc||0.7,
-    note:"自訂翼型"+(dat?`（需把 ${dat} 放進 airfoils/）`:"（NACA 內建公式）")};
+    note:"自訂翼型"+(isNaca?"（NACA 內建公式）":
+      srcUrl?"（機器人/Fusion 會自動下載）":`（需把 ${dat} 放進 airfoils/）`)};
   state.customFoils.push(nf);
   // 組「一鍵開 Issue 上傳」連結（機器人 workflow 會自動 commit）。
   // 表單有選 .dat 檔時直接把座標內容預填進 Issue（URL 太長才退回手貼）。
   const meta={name:nf.name, dat:nf.dat, clmax:nf.clmax, clCruise:nf.clCruise};
+  if(nf.url) meta.url=nf.url;
   const datText=(state._nfDatText||"").trim();
   const mkBody=(datPart)=>
     "送出這個 Issue 就完成上傳——機器人會自動驗證並 commit 進社團翼型庫，"+
@@ -803,6 +813,10 @@ function addFoil(){
   let embedded=false, issueUrl;
   if(!nf.dat){
     issueUrl=mkUrl(mkBody("（NACA 四位數免附檔，直接送出即可）")); embedded=true;
+  }else if(nf.url && !datText){
+    // 只給網址：機器人會自己去 airfoiltools 抓座標，使用者什麼都不用貼
+    issueUrl=mkUrl(mkBody("（已提供 airfoiltools 網址，機器人會自動下載座標，直接送出即可）"));
+    embedded=true;
   }else if(datText){
     issueUrl=mkUrl(mkBody("```dat\n"+datText+"\n```"));
     embedded = issueUrl.length<=7000;     // GitHub/伺服器 URL 上限保險值
@@ -816,9 +830,25 @@ function addFoil(){
   }
   state._shareFoil={name:nf.name, issueUrl, embedded,
     datText:(!embedded&&datText)?datText:null};
-  state._nfDatText=null;
+  state._nfDatText=null; state._nfUrl=null;
   state.foil=name; state.clmax=clmax||1.2; state.clcruise=clc||0.7;
   render();
+}
+function parseFoilUrl(url){
+  const msg=$("#nf_urlmsg");
+  const m=(url||"").match(/airfoiltools\.com.*?airfoil=([\w.-]+)/i);
+  if(!m){
+    state._nfUrl=null;
+    if((url||"").trim()) msg.innerHTML="⚠ 認不出來——網址要像 "+
+      "<code>airfoiltools.com/airfoil/details?airfoil=<b>oa206-il</b></code>";
+    return;
+  }
+  const id=m[1];
+  state._nfUrl="http://airfoiltools.com/airfoil/details?airfoil="+id;
+  if(!$("#nf_dat").value) $("#nf_dat").value=id.replace(/-il$/,"")+".dat";
+  if(!$("#nf_name").value) $("#nf_name").value=id.replace(/-il$/,"").toUpperCase();
+  msg.innerHTML="✅ 認出翼型代號 <code>"+id+"</code>——免下載，上傳時機器人會自動抓座標"+
+    "（正式名稱也會依 .dat 檔頭校正）";
 }
 function readFoilFile(inp){
   const f=inp.files&&inp.files[0];
