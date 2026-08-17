@@ -97,5 +97,17 @@
   "aoaCruise": null,
   "note": "Selig 撲翼機翼型（低雷諾數）；係數為初估，請依極線校正",
   "url": "http://airfoiltools.com/airfoil/details?airfoil=s1020-il"
+ },
+ {
+  "name": "ONERA OA206 AIRFOIL",
+  "dat": "oa206.dat",
+  "have": true,
+  "cls": [],
+  "clmax": 0.85,
+  "clCruise": 0.55,
+  "aoaStall": null,
+  "aoaCruise": null,
+  "note": "由 Issue 自動提交",
+  "url": ""
  }
 ]
