@@ -1046,8 +1046,14 @@ function rXflr5(){
   <details class="teach" open><summary>📚 xflr5 六步流程（照抄就能跑）</summary>
     <ol>
       <li><b>安裝</b>：<a href="https://www.xflr5.tech" target="_blank">xflr5.tech</a> 免費下載。</li>
-      <li><b>翼型極線</b>：File &gt; Direct Foil Analysis → 載入主翼/尾翼翼型（.dat 或 NACA 產生器）→
-        Analysis &gt; Batch Analysis，Re 範圍抓 <code>50,000 ~ 300,000</code>（要涵蓋你的 ${reTxt}）。
+      <li><b>翼型極線</b>（<b>這步不能跳</b>，實測跳過會整批失敗）：<code>Ctrl+1</code> Direct Foil Design
+        載入主翼 .dat、尾翼用 <code>Foil &gt; NACA Foils</code> 打 0008 →
+        <code>Ctrl+5</code> XFoil Direct Analysis → <b>Analysis &gt; Batch Analysis</b>：
+        <b>兩個翼型都選起來</b>（Ctrl+點）、Re 用預設階梯即可（已涵蓋你的 ${reTxt}）、
+        <b>α 範圍要跟第 5 步一致填 −20 / 20 / 0.5</b>。
+        <br><span style="color:var(--ink2)">實測：沒先跑這步，第 5 步會整排噴
+        <code>could not be interpolated (CLmax = 0.00)</code> 且四張圖全空；α 範圍比 3D 窄的話，
+        超出範圍的攻角也會插值失敗。</span>
         <br><span style="color:var(--ink2)">「極線」＝翼型的成績單：在某個雷諾數下把攻角從小掃到大，
         記錄每個攻角的升力係數 Cl、阻力係數 Cd、力矩係數 Cm。之後 xflr5 算整機，就是拿這些
         成績單去組合——所以雷諾數範圍一定要涵蓋你實際飛的 Re，否則等於拿別人的成績單抄。</span></li>
