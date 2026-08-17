@@ -493,8 +493,87 @@ function buildXlsxBytes(i,o,fileName){
   ]);
   return makeZip(files);
 }
+/* ---------- xflr5 飛機定義 XML（Plane > Import Plane(s) from xml file(s)） ---------- */
+function buildXflr5Xml(i,o,name){
+  const T=i.tailType||"cross";
+  const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
+  const sec=(y,chord,xoff,dihe,twist,foil)=>`
+    <Section>
+     <y_position>${M(y)}</y_position>
+     <Chord>${M(chord)}</Chord>
+     <xOffset>${M(xoff)}</xOffset>
+     <Dihedral>${dihe.toFixed(2)}</Dihedral>
+     <Twist>${twist.toFixed(2)}</Twist>
+     <x_number_of_panels>13</x_number_of_panels>
+     <x_panel_distribution>COSINE</x_panel_distribution>
+     <y_number_of_panels>19</y_number_of_panels>
+     <y_panel_distribution>UNIFORM</y_panel_distribution>
+     <Left_Side_FoilName>${E(foil)}</Left_Side_FoilName>
+     <Right_Side_FoilName>${E(foil)}</Right_Side_FoilName>
+    </Section>`;
+  const wing=(wname,type,pos,isFin,sections)=>`
+   <wing>
+    <Name>${E(wname)}</Name>
+    <Type>${type}</Type>
+    <Position>${pos.map(v=>(v/1000).toFixed(6)).join(", ")}</Position>
+    <Tilt_angle>0.000</Tilt_angle>
+    <Symetric>${isFin?"false":"true"}</Symetric>
+    <isFin>${isFin?"true":"false"}</isFin>
+    <isDoubleFin>false</isDoubleFin>
+    <isSymFin>false</isSymFin>
+    <Inertia><Volume_Mass>0.000</Volume_Mass></Inertia>
+    <Sections>${sections}</Sections>
+   </wing>`;
+  const foil=i.foilData.name;
+  // 主翼：2 站位；xflr5 的 Dihedral 是「本段」屬性→掛在起始剖面，
+  // 末剖面的 Dihedral 被忽略（官方 wing.cpp 語意），慣例填 0。
+  // 展向用 span/2（自中線起算的完整梯形）而非扣機身的翼段半展——
+  // VLM 慣例把機身段升力視為連續，這也是精靈算 S/AR/Vh 的口徑，
+  // 兩邊一致 xflr5 才是在驗證「同一台飛機」。
+  const mainSecs =
+    sec(0, i.chord, 0, i.dihedral, i.incidence, foil)+
+    sec(i.span/2, o.ct, 0.25*(i.chord-o.ct), 0, i.incidence-i.washout, foil);
+  let tailWings="";
+  if(T==="vee"){
+    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,0],false,
+      sec(0, i.veeCr, 0, i.veeAngle, 0, TAIL_FOIL.name)+
+      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, 0, TAIL_FOIL.name));
+  }else{
+    tailWings = wing("Elevator","ELEVATOR",[o.htailLeX,0,o.htailZ],false,
+      sec(0, o.chRoot, 0, 0, 0, TAIL_FOIL.name)+
+      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, 0, TAIL_FOIL.name));
+    // hh/box 在 xflr5 以「等效單垂尾」近似：兩片各 Sv/2、同弦長 →
+    // 高度加倍即得總面積 Sv 的單片（Vv 等效，橫航向穩定性量級一致）。
+    tailWings += wing("Fin","FIN",[o.finLeX,0,0],true,
+      sec(0, o.cvRoot, 0, 0, 0, TAIL_FOIL.name)+
+      sec(o.bv*1000*((T==="hh"||T==="box")?2:1), o.cvTip,
+          0.25*(o.cvRoot-o.cvTip), 0, 0, TAIL_FOIL.name));
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE explane>
+<explane version="1.0">
+ <Units>
+  <length_unit_to_meter>1</length_unit_to_meter>
+  <mass_unit_to_kg>1</mass_unit_to_kg>
+ </Units>
+ <Plane>
+  <Name>${E(name)}</Name>
+  <Description>由 NYCU UAV 填表精靈產生</Description>
+  <Inertia>
+   <Point_Mass>
+    <Tag>全機質量</Tag>
+    <Mass>${(i.mtow/1000).toFixed(4)}</Mass>
+    <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
+   </Point_Mass>
+  </Inertia>
+  <has_body>false</has_body>${wing("Main Wing","MAINWING",[0,0,0],false,mainSecs)}${tailWings}
+ </Plane>
+</explane>
+`;
+}
+
 /* node 測試掛鉤 */
-if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,PRESETS,FOILS,allFoils};}
+if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,PRESETS,FOILS,allFoils};}
 </script>
 
 <!-- ======================= UI 區 ======================= -->
@@ -845,6 +924,8 @@ function rXflr5(){
   const i=inputs(),o=compute(i);
   const reTxt=Math.round(o.re).toLocaleString();
   const xcgMM=(i.xcg*o.mac).toFixed(0);
+  const E=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  const foilName=i.foilData.name;
   return `<div class="card"><h2><span class="no">STEP 8</span>xflr5 驗證（強烈建議）</h2>
   <div class="lead">精靈的中性點（XNP）與穩定裕度是<b>公式初估</b>；xflr5 用你的實際幾何免費精算。
   跑完把 XNP 填回下面欄位，總檢查會自動改用實測值。沒空跑也能直接產表，但首飛前跑一輪最保險。</div>
@@ -863,10 +944,15 @@ function rXflr5(){
         <br><span style="color:var(--ink2)">「極線」＝翼型的成績單：在某個雷諾數下把攻角從小掃到大，
         記錄每個攻角的升力係數 Cl、阻力係數 Cd、力矩係數 Cm。之後 xflr5 算整機，就是拿這些
         成績單去組合——所以雷諾數範圍一定要涵蓋你實際飛的 Re，否則等於拿別人的成績單抄。</span></li>
-      <li><b>畫全機</b>：File &gt; Wing and Plane Design → Plane &gt; Define a New Plane，
-        照本精靈的尺寸填（主翼/尾翼幾何在各步、位置在「機身佈局」步的 📍 都有）。</li>
-      <li><b>設重量重心</b>：右鍵 Plane &gt; Define Inertia，總質量 ${i.mtow} g、
-        重心 X＝距主翼前緣 ${xcgMM} mm。</li>
+      <li><b>匯入全機（免手畫）</b>：按
+        <button class="btn" style="font-size:.85rem;padding:.15rem .7rem" onclick="doGenXml()">⬇ 下載 xflr5 飛機檔 (.xml)</button>
+        → xflr5 的 File &gt; Wing and Plane Design → <b>Plane &gt; Import Plane(s) from xml file(s)</b>
+        選這個檔——主翼/尾翼幾何、位置、重量重心（${i.mtow} g @ 距主翼前緣 ${xcgMM} mm）全部自動帶入。
+        <br><span style="color:var(--ink2)">⚠ 翼型名稱必須<b>一字不差（含大小寫與空格）</b>：xflr5 匯入時
+        不會檢查也不會報錯，找不到同名翼型會靜默變成平板、分析結果全錯。
+        本檔用的名稱是 <code>${E(foilName)}</code> 與 <code>${E(TAIL_FOIL.name)}</code>——
+        先在第 2 步把這兩個翼型載進 Direct Foil Design（.dat 檔頭第一行就是 xflr5 認的名稱，
+        必要時在 xflr5 裡改名對齊）。想手畫也可以，尺寸在各步、位置在「機身佈局」的 📍。</span></li>
       <li><b>跑分析</b>：Define an Analysis（Type 1 固定速度 ${i.v} m/s）→ α 掃 <code>−20° ~ 20°</code>
         （失速角之後的區段 xflr5 不準，參考就好）。<b>四張圖照這個順序看</b>：
         <ol style="margin:.2rem 0 .2rem 1rem">
@@ -933,6 +1019,15 @@ function renderFinalTable(){
   const i=inputs(),o=compute(i),cs=checks(i,o);
   $("#finalTable").innerHTML=`<table class="check">`+cs.map(c=>
     `<tr><td>${c[1]}</td><td class="v-${c[0]}">${c[2]}</td><td class="v-${c[0]}">${c[0]==="ok"?"✓":"⚠"}</td><td>${c[3]}</td></tr>`).join("")+`</table>`;
+}
+function doGenXml(){
+  const i=inputs(),o=compute(i);
+  const name=(state._fname||"design").replace(/[\\/:*?"<>|]/g,"");
+  const xml=buildXflr5Xml(i,o,name);
+  const blob=new Blob([xml],{type:"application/xml"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=name+"_xflr5.xml"; a.click();
+  URL.revokeObjectURL(a.href);
 }
 function doGenerate(){
   const i=inputs(),o=compute(i);
