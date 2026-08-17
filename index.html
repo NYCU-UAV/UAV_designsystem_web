@@ -249,8 +249,10 @@ function compute(i){
   o.lv = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*(T==="vee"?o.tailAvgC:o.cvAvg);
   o.vh = o.shEff*(o.lh/1000)/(o.S*o.mac/1000);
   o.vv = o.svEff*(o.lv/1000)/(o.S*o.bproj);
-  // 穩定性
-  o.xnp = 0.25 + (1+2/o.AR)/(1+2/o.arhEff)*(1-4/(o.AR+2))*o.vh;
+  // 穩定性（xflr5 實測 XNP 優先；沒填用 MIT 公式估）
+  o.xnpEst = 0.25 + (1+2/o.AR)/(1+2/o.arhEff)*(1-4/(o.AR+2))*o.vh;
+  o.xnpFromXflr5 = i.xnpX>0;
+  o.xnp = o.xnpFromXflr5 ? i.xnpX : o.xnpEst;
   o.sm = o.xnp - i.xcg;
   o.B = (o.lv/1000/o.bproj)*i.dihedral/o.clreq;
   o.vvb = o.vv*o.B;
@@ -301,7 +303,9 @@ function checks(i,o){
     (o.tailType==="vee"?"（V 尾以 cos² 有效面積換算）":""));
   rng(o.vv,0.02,0.05,"Vv 垂直尾容積","太小會擺尾（荷蘭滾）、太大盤旋不穩"+
     (o.tailType==="vee"?"（V 尾以 sin² 有效面積換算）":""));
-  rng(o.sm,0.05,0.15,"靜穩定裕度 SM","<0.05 神經質難飛；>0.20 遲鈍、抬頭配平重");
+  rng(o.sm,0.05,0.15,"靜穩定裕度 SM",
+    (o.xnpFromXflr5?"（XNP 用 xflr5 實測值）":"（XNP 用公式估算，建議跑 xflr5 精算）")+
+    "<0.05 神經質難飛；>0.20 遲鈍、抬頭配平重");
   c.push([o.B>=5?"ok":o.B>=3?"warn":"bad","B 螺旋穩定",fmt(o.B),
     o.B>=5?"放手自穩":o.B>=3?"副翼機可接受（3~5）":"螺旋不穩：加上反角"]);
   if(o.tailType!=="vee") c.push([o.vvb>=0.10&&o.vvb<=0.20?"ok":"warn","Vv·B 舵轉權威",fmt(o.vvb,3),
@@ -461,6 +465,7 @@ function buildXlsxBytes(i,o,fileName){
     ["機頭距離",i.noseC,"chord"],["尾翼距離",i.tailC,"chord"],["重心位置",i.xcg,"MAC比"],
     ["平尾面積比",i.shr,""],["平尾AR",i.arh,""],["垂尾面積比",i.svr,""],
     ["垂尾AR",i.arv,""],["尾翼構型",i.tailType,""],
+    ["XNP(xflr5實測,0=未跑)",i.xnpX,"MAC比"],
     ["馬達功率",i.motorW,"W"],["靜推力",i.thrust,"g"],
   ];
   const calcRows=[["計算結果紀錄（值）"],["項目","值","判定"],
@@ -482,7 +487,7 @@ if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,PR
 "use strict";
 const $=q=>document.querySelector(q);
 const state={ preset:"trainer", step:0, htailX:0, finX:0,
-  veeAngle:0, veeL:0, veeCr:0, veeTaper:0.7,
+  veeAngle:0, veeL:0, veeCr:0, veeTaper:0.7, xnpX:0,
   ...JSON.parse(JSON.stringify(PRESETS.trainer.d)) };
 { const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
   state.clmax=f0.clmax; state.clcruise=f0.clCruise; }
@@ -512,6 +517,7 @@ const STEPS=[
  {id:"layout", title:"機身佈局", render:rLayout},
  {id:"tail", title:"尾翼", render:rTail},
  {id:"power", title:"動力", render:rPower},
+ {id:"xflr5", title:"xflr5 驗證", render:rXflr5},
  {id:"final", title:"總檢查產出", render:rFinal},
 ];
 
@@ -562,7 +568,7 @@ function pickPreset(k){
   state.foil=PRESETS[k].d.foil;
   const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
   state.clmax=f0.clmax; state.clcruise=f0.clCruise;
-  state.htailX=0; state.finX=0; state.veeAngle=0;   // 位置回自動、V 參數重新換算
+  state.htailX=0; state.finX=0; state.veeAngle=0; state.xnpX=0;   // 位置/實測值回自動
   ensureVeeDefaults();
   render();
 }
@@ -705,11 +711,48 @@ function rPower(){
   </div>
   <div data-live='["功率負載","靜推重比"]'></div></div>`;
 }
+function rXflr5(){
+  const i=inputs(),o=compute(i);
+  const reTxt=Math.round(o.re).toLocaleString();
+  const xcgMM=(i.xcg*o.mac).toFixed(0);
+  return `<div class="card"><h2><span class="no">STEP 8</span>xflr5 驗證（強烈建議）</h2>
+  <div class="lead">精靈的中性點（XNP）與穩定裕度是<b>公式初估</b>；xflr5 用你的實際幾何免費精算。
+  跑完把 XNP 填回下面欄位，總檢查會自動改用實測值。沒空跑也能直接產表，但首飛前跑一輪最保險。</div>
+  <div class="badges">
+    <span class="badge">分析雷諾數 <b>${reTxt}</b></span>
+    <span class="badge">巡航速度 <b>${i.v} m/s</b></span>
+    <span class="badge">全備重 <b>${i.mtow} g</b></span>
+    <span class="badge">重心 <b>距主翼前緣 ${xcgMM} mm</b>（${i.xcg}×MAC）</span>
+    <span class="badge">目前 XNP 估算 <b>${o.xnpEst.toFixed(3)}c</b></span>
+  </div>
+  <details class="teach" open><summary>📚 xflr5 六步流程（照抄就能跑）</summary>
+    <ol>
+      <li><b>安裝</b>：<a href="https://www.xflr5.tech" target="_blank">xflr5.tech</a> 免費下載。</li>
+      <li><b>翼型極線</b>：File &gt; Direct Foil Analysis → 載入主翼/尾翼翼型（.dat 或 NACA 產生器）→
+        Analysis &gt; Batch Analysis，Re 範圍抓 <code>50,000 ~ 300,000</code>（要涵蓋你的 ${reTxt}）。</li>
+      <li><b>畫全機</b>：File &gt; Wing and Plane Design → Plane &gt; Define a New Plane，
+        照本精靈的尺寸填（主翼/尾翼幾何在各步、位置在「機身佈局」步的 📍 都有）。</li>
+      <li><b>設重量重心</b>：右鍵 Plane &gt; Define Inertia，總質量 ${i.mtow} g、
+        重心 X＝距主翼前緣 ${xcgMM} mm。</li>
+      <li><b>跑分析</b>：Define an Analysis（Type 1 固定速度 ${i.v} m/s）→ α 掃 −5°~12°，看四張圖：
+        <b>Cm vs α</b> 在巡航攻角附近過零；<b>Cl vs α</b> 在 α=0 時 &gt;0；
+        <b>Cl/Cd vs α</b> 峰值在巡航攻角附近；<b>Cm vs Cl</b> 斜率為負（自穩定）。</li>
+      <li><b>讀 XNP</b>：跑 Stability analysis（Type 7），或看 Polar 資料裡的 Neutral Point——
+        換算成「距主翼前緣的弦長比」填回下面。</li>
+    </ol></details>
+  <div class="grid2">
+  ${field("xnpX","xflr5 實測 XNP（弦長比；0＝還沒跑）","","例：XNP 在 43% MAC 就填 0.43；填入後 SM 檢核自動改用實測值","step=0.005")}
+  </div>
+  <div data-live='["靜穩定裕度 SM"]'></div>
+  <div class="hint">⚠ xflr5 已知限制（引用官方文件）：總阻力普遍低估約 20%、CLmax 偏高、
+  <b>不要建機身</b>（官方原話：對分析是幫倒忙，只建翼＋尾即可）、完全沒有螺旋槳效應——
+  手擲滑翔配平準、開動力後配平跑掉是正常現象，不要回頭亂改模型。</div></div>`;
+}
 function rFinal(){
   const today=new Date();
   const d=today.getFullYear()+String(today.getMonth()+1).padStart(2,"0")+String(today.getDate()).padStart(2,"0");
   if(!state._fname) state._fname=d+"_我的"+PRESETS[state.preset].label;
-  return `<div class="card"><h2><span class="no">STEP 8</span>總檢查 → 產生設計表</h2>
+  return `<div class="card"><h2><span class="no">STEP 9</span>總檢查 → 產生設計表</h2>
   <div class="lead">全部綠燈最理想；⚠ 黃字代表「可以飛，但要知道自己在取捨什麼」。</div>
   <div id="finalTable"></div>
   <div class="field" style="margin-top:.8rem"><label>檔案名稱</label>
