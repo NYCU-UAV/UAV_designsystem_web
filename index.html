@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飛機設計填表精靈</title>
+<style>
+:root{
+  --paper:#f3e9d2; --paper2:#ece0c3; --card:#faf4e4; --ink:#33302a;
+  --ink2:#6b6353; --line:#d8c9a5; --accent:#b65c2e; --accent2:#8f4a26;
+  --ok:#3f7d3f; --warn:#a8731d; --bad:#a83a2a; --blue:#3a5a78;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:17.5px}
+body{
+  font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
+  color:var(--ink);background:var(--paper);
+  background-image:
+    radial-gradient(rgba(182,92,46,.045) 1px, transparent 1.4px),
+    linear-gradient(180deg,#f5ecd7 0%,#f0e4c8 100%);
+  background-size:26px 26px,100% 100%;
+  line-height:1.65;padding:1.2rem .9rem 4rem;
+}
+.wrap{max-width:46rem;margin:0 auto}
+header.hero{
+  border:2px solid var(--ink);border-radius:.6rem;background:var(--card);
+  padding:1.1rem 1.2rem;margin-bottom:1.1rem;position:relative;overflow:hidden;
+  box-shadow:.25rem .25rem 0 rgba(51,48,42,.18);
+}
+header.hero::after{
+  content:"NYCU UAV";position:absolute;right:-.4rem;top:-.9rem;
+  font:700 3.6rem/1 Consolas,monospace;color:rgba(182,92,46,.10);
+  letter-spacing:-.05em;pointer-events:none;
+}
+h1{font-size:1.45rem;letter-spacing:.08em}
+.sub{color:var(--ink2);font-size:.92rem;margin-top:.25rem}
+/* 進度列 */
+.steps{display:flex;flex-wrap:wrap;gap:.35rem;margin:0 0 1rem}
+.steps button{
+  flex:1 1 auto;min-width:5.2rem;border:1.5px solid var(--ink);border-radius:.45rem;
+  background:var(--card);padding:.35rem .4rem;font:inherit;font-size:.82rem;
+  cursor:pointer;color:var(--ink2);transition:all .15s;
+}
+.steps button.cur{background:var(--accent);color:#fff;border-color:var(--accent2);
+  box-shadow:.15rem .15rem 0 rgba(51,48,42,.25);transform:translateY(-1px)}
+.steps button.done{color:var(--ok);border-color:var(--ok)}
+/* 卡片 */
+.card{
+  background:var(--card);border:2px solid var(--ink);border-radius:.6rem;
+  padding:1.1rem 1.2rem 1.3rem;margin-bottom:1rem;
+  box-shadow:.25rem .25rem 0 rgba(51,48,42,.18);
+}
+.card h2{font-size:1.15rem;margin-bottom:.2rem;display:flex;align-items:baseline;gap:.5rem}
+.card h2 .no{font:700 1rem Consolas,monospace;color:var(--accent);letter-spacing:.05em}
+.lead{color:var(--ink2);font-size:.92rem;margin-bottom:.9rem}
+/* 欄位 */
+.field{margin-bottom:.9rem}
+.field label{display:block;font-weight:700;font-size:.95rem;margin-bottom:.15rem}
+.field .hint{font-size:.83rem;color:var(--ink2);margin-top:.2rem}
+.field input[type=number],.field input[type=text],.field select{
+  width:100%;max-width:14rem;font:inherit;font-size:1.05rem;padding:.35rem .55rem;
+  border:1.5px solid var(--ink);border-radius:.4rem;background:#fffdf6;color:var(--ink);
+}
+.field input:focus,.field select:focus{outline:3px solid rgba(182,92,46,.35)}
+.unit{font-size:.9rem;color:var(--ink2);margin-left:.35rem}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.2rem .9rem}
+/* 徽章即時回饋 */
+.badges{display:flex;flex-wrap:wrap;gap:.45rem;margin:.7rem 0 .2rem}
+.badge{
+  border:1.5px solid var(--line);border-radius:.45rem;background:#fffdf6;
+  padding:.3rem .6rem;font-size:.85rem;box-shadow:.12rem .12rem 0 rgba(51,48,42,.08);
+}
+.badge b{font-family:Consolas,monospace;font-size:1rem}
+.badge.ok{border-color:var(--ok);color:var(--ok)}
+.badge.warn{border-color:var(--warn);color:var(--warn)}
+.badge.bad{border-color:var(--bad);color:var(--bad)}
+/* 機型卡 */
+.presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:.6rem;margin:.4rem 0 .6rem}
+.preset{
+  border:2px solid var(--line);border-radius:.55rem;background:#fffdf6;padding:.7rem .8rem;
+  cursor:pointer;transition:all .15s;
+}
+.preset:hover{transform:translateY(-2px)}
+.preset.sel{border-color:var(--accent);background:#fdf3e4;box-shadow:.2rem .2rem 0 rgba(182,92,46,.3)}
+.preset h3{font-size:1rem}
+.preset p{font-size:.8rem;color:var(--ink2);margin-top:.2rem}
+/* 翼型卡 */
+.foilcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:.6rem;margin:.4rem 0}
+.foil{border:2px solid var(--line);border-radius:.55rem;background:#fffdf6;padding:.6rem .75rem;cursor:pointer}
+.foil.sel{border-color:var(--blue);background:#eef2f6;box-shadow:.2rem .2rem 0 rgba(58,90,120,.3)}
+.foil h4{font-size:.98rem;font-family:Consolas,monospace}
+.foil p{font-size:.8rem;color:var(--ink2)}
+.foil .tag{display:inline-block;font-size:.72rem;border:1px solid var(--ok);color:var(--ok);
+  border-radius:.3rem;padding:0 .3rem;margin-top:.25rem}
+.foil .tag.dl{border-color:var(--warn);color:var(--warn)}
+details.teach{border:1.5px dashed var(--accent);border-radius:.5rem;padding:.6rem .8rem;margin:.7rem 0;background:#fdf6e9}
+details.teach summary{cursor:pointer;font-weight:700;color:var(--accent2)}
+details.teach ol{padding-left:1.3rem;margin-top:.4rem;font-size:.9rem}
+details.teach li{margin-bottom:.3rem}
+/* 導覽按鈕 */
+.nav{display:flex;justify-content:space-between;gap:.6rem;margin-top:.6rem}
+.btn{
+  font:inherit;font-weight:700;font-size:1.02rem;padding:.5rem 1.3rem;cursor:pointer;
+  border:2px solid var(--ink);border-radius:.5rem;background:var(--card);color:var(--ink);
+  box-shadow:.2rem .2rem 0 rgba(51,48,42,.25);transition:all .12s;
+}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(1px);box-shadow:.05rem .05rem 0 rgba(51,48,42,.25)}
+.btn.primary{background:var(--accent);border-color:var(--accent2);color:#fff}
+.btn.big{font-size:1.15rem;padding:.7rem 1.6rem;width:100%}
+/* 總檢查表 */
+table.check{width:100%;border-collapse:collapse;font-size:.9rem;margin:.5rem 0}
+table.check td{border-bottom:1px solid var(--line);padding:.4rem .3rem;vertical-align:top}
+table.check td:nth-child(2){font-family:Consolas,monospace;white-space:nowrap;text-align:right}
+td.v-ok{color:var(--ok);font-weight:700}
+td.v-warn{color:var(--warn);font-weight:700}
+td.v-bad{color:var(--bad);font-weight:700}
+.fusion-steps{border:2px solid var(--blue);border-radius:.55rem;background:#eef2f6;padding: .9rem 1rem;margin-top:1rem}
+.fusion-steps h3{color:var(--blue);font-size:1.05rem}
+.fusion-steps ol{padding-left:1.3rem;margin-top:.4rem;font-size:.92rem}
+.fusion-steps li{margin-bottom:.35rem}
+code{font-family:Consolas,monospace;background:#efe6cd;border-radius:.25rem;padding:0 .3rem;font-size:.88em}
+.hidden{display:none}
+@media (max-width:480px){ html{font-size:16.5px} .card{padding:.9rem .8rem 1rem} }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <h1>✈️ 飛機設計填表精靈</h1>
+  <div class="sub">一步一步把你的飛機定出來 → 產生設計表 xlsx → 丟進 Fusion 360 一鍵長出機翼。
+  每一步都有即時檢核，<b>綠色✓代表落在「好飛」的經驗區間</b>；出現⚠不是錯，是提醒你想清楚。</div>
+</header>
+
+<div class="steps" id="stepbar"></div>
+<div id="stepHost"></div>
+
+<div class="nav">
+  <button class="btn" id="btnPrev">← 上一步</button>
+  <button class="btn primary" id="btnNext">下一步 →</button>
+</div>
+</div>
+
+<!-- ======================= 純邏輯區（node 可獨立測試，勿放 DOM 碼） ======================= -->
+<script id="core-logic">
+"use strict";
+/* ---------- 航模翼型小百科（AIRFOILS 分頁資料源） ---------- */
+const FOILS = [
+ {name:"Clark Y", dat:"clarky.dat", have:true, cls:["trainer","park"],
+  clmax:1.3, aoaStall:12, clCruise:0.8, aoaCruise:4,
+  note:"平底經典練習翼型，好做好飛，repo 已附檔",
+  url:"http://airfoiltools.com/airfoil/details?airfoil=clarky-il"},
+ {name:"SD7037", dat:"sd7037.dat", have:true, cls:["glider","park"],
+  clmax:1.25, aoaStall:11, clCruise:0.7, aoaCruise:4,
+  note:"低雷諾數滑翔名翼型（Selig 設計），repo 已附檔",
+  url:"http://airfoiltools.com/airfoil/details?airfoil=sd7037-il"},
+ {name:"AG35", dat:"ag35.dat", have:true, cls:["glider"],
+  clmax:1.2, aoaStall:10, clCruise:0.65, aoaCruise:3,
+  note:"Drela 設計的滑翔翼型，薄而低阻，repo 已附檔",
+  url:"http://airfoiltools.com/airfoil/details?airfoil=ag35-il"},
+ {name:"NACA 2412", dat:"", have:true, cls:["sport","trainer"],
+  clmax:1.25, aoaStall:13, clCruise:0.7, aoaCruise:4,
+  note:"半對稱萬用翼型；NACA 四位數免下載（程式內建公式）",
+  url:"http://airfoiltools.com/airfoil/details?airfoil=naca2412-il"},
+ {name:"NACA 0012", dat:"", have:true, cls:["sport"],
+  clmax:1.1, aoaStall:13, clCruise:0.5, aoaCruise:4,
+  note:"對稱翼型，正倒飛一樣；特技取向。免下載",
+  url:"http://airfoiltools.com/airfoil/details?airfoil=naca0012-il"},
+ {name:"S1223", dat:"s1223.dat", have:false, cls:["lift"],
+  clmax:1.85, aoaStall:10, clCruise:1.2, aoaCruise:5,
+  note:"超高升力（載重挑戰用）；阻力大、需下載 .dat",
+  url:"http://airfoiltools.com/airfoil/details?airfoil=s1223-il"},
+];
+const TAIL_FOIL = {name:"NACA 0008", dat:""};
+
+/* ---------- 機型預設 ---------- */
+const PRESETS = {
+ trainer:{label:"練習機", desc:"新生首選：慢、穩、摔得起",
+  d:{mtow:700, v:12, chord:220, span:1200, taper:0.7, dihedral:5, washout:1,
+     incidence:2, tegap:0, gap:60, foil:"Clark Y", noseC:1.25, tailC:2.5, xcg:0.35,
+     shr:0.15, arh:4, th:0.6, svr:0.08, arv:1.5, tv:0.6, vtype:"conventional",
+     motorW:150, thrust:500}},
+ park:{label:"公園慢速機", desc:"更輕更慢，小場地飛",
+  d:{mtow:450, v:9, chord:200, span:1100, taper:0.8, dihedral:6, washout:1,
+     incidence:2, tegap:0, gap:50, foil:"Clark Y", noseC:1.25, tailC:2.3, xcg:0.33,
+     shr:0.18, arh:4, th:0.7, svr:0.09, arv:1.5, tv:0.6, vtype:"conventional",
+     motorW:100, thrust:350}},
+ sport:{label:"運動機", desc:"會飛了之後的第二台",
+  d:{mtow:1100, v:16, chord:240, span:1300, taper:0.65, dihedral:3, washout:1,
+     incidence:1.5, tegap:0, gap:70, foil:"NACA 2412", noseC:1.3, tailC:2.6, xcg:0.33,
+     shr:0.16, arh:4, th:0.6, svr:0.08, arv:1.6, tv:0.6, vtype:"conventional",
+     motorW:300, thrust:1000}},
+ glider:{label:"電動滑翔機", desc:"追熱氣流、慢慢飄",
+  d:{mtow:800, v:9, chord:180, span:2000, taper:0.6, dihedral:4, washout:1.5,
+     incidence:2, tegap:0, gap:50, foil:"SD7037", noseC:1.2, tailC:2.8, xcg:0.36,
+     shr:0.12, arh:4.5, th:0.6, svr:0.07, arv:1.6, tv:0.6, vtype:"V",
+     motorW:200, thrust:600}},
+};
+
+/* ---------- 全部公式（與 xlsx CALC 分頁同一套；SI 內部計算） ---------- */
+function compute(i){
+  const g=9.80665, rho=1.225, mu=1.81e-5;
+  const W=i.mtow/1000, V=i.v, cr=i.chord, t=i.taper;
+  const o={};
+  o.ct = cr*t;
+  o.mac = (2/3)*cr*(1+t+t*t)/(1+t);
+  o.avg = cr*(1+t)/2;
+  o.halfspan = (i.span - i.gap)/2;
+  o.bproj = i.span/1000*Math.cos(i.dihedral*Math.PI/180);
+  o.S = o.avg/1000*o.bproj;
+  o.AR = o.bproj*o.bproj/o.S;
+  o.wl = W/o.S*10;                                   // g/dm²
+  o.wcl = (W*35.27396)/Math.pow(o.S*10.76391,1.5);
+  o.clreq = W*g/(0.5*rho*V*V*o.S);
+  const f = i.foilData;
+  o.vs = Math.sqrt(2*W*g/(rho*o.S*f.clmax));
+  o.vto = 1.2*o.vs; o.vapp = 1.3*o.vs;
+  o.margin = V/o.vs;
+  o.re = rho*V*(o.mac/1000)/mu;
+  // 水平尾
+  o.sh = i.shr*o.S; o.bh = Math.sqrt(i.arh*o.sh);
+  o.chAvg = o.sh/o.bh*1000;
+  o.chRoot = o.chAvg*2/(1+i.th); o.chTip = o.chRoot*i.th;
+  o.lh = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*o.chAvg;
+  o.vh = o.sh*(o.lh/1000)/(o.S*o.mac/1000);
+  // 垂直尾
+  o.sv = i.svr*o.S; o.bv = Math.sqrt(i.arv*o.sv);
+  o.cvAvg = o.sv/o.bv*1000;
+  o.cvRoot = o.cvAvg*2/(1+i.tv); o.cvTip = o.cvRoot*i.tv;
+  o.lv = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*o.cvAvg;
+  o.vv = o.sv*(o.lv/1000)/(o.S*o.bproj);
+  // 穩定性
+  o.xnp = 0.25 + (1+2/o.AR)/(1+2/i.arh)*(1-4/(o.AR+2))*o.vh;
+  o.sm = o.xnp - i.xcg;
+  o.B = (o.lv/1000/o.bproj)*i.dihedral/o.clreq;
+  o.vvb = o.vv*o.B;
+  // V 尾
+  o.veeAngle = Math.atan(Math.sqrt(o.sv/o.sh))*180/Math.PI;
+  o.veeArea = (o.sh+o.sv)*1.075;
+  o.veeSlant = Math.sqrt(o.veeArea*i.arh)/2*1000;
+  // 佈局
+  o.noseLE = i.noseC*o.avg;
+  o.totalLen = (i.noseC+i.tailC)*o.avg + cr;
+  o.htailLeX = i.xcg*o.mac + o.lh - 0.25*o.chAvg;
+  o.vtailLeX = i.xcg*o.mac + o.lv - 0.25*o.cvAvg;
+  // 動力
+  o.wkg = i.motorW>0 ? i.motorW/W : 0;
+  o.tr = i.thrust>0 ? i.thrust/1000/W : 0;
+  return o;
+}
+
+/* ---------- 檢核（回傳 [等級, 訊息]；等級 ok/warn/bad） ---------- */
+function checks(i,o){
+  const c=[];
+  const rng=(v,lo,hi,name,why)=> c.push(
+    v>=lo&&v<=hi ? ["ok",name,fmt(v),"落在建議 "+lo+"~"+hi]
+                 : ["warn",name,fmt(v),"建議 "+lo+"~"+hi+"："+why]);
+  rng(o.AR,4.5,7.5,"展弦比","太低滑翔差、太高翼樑要夠強（滑翔機 8~25 另計）");
+  const wclCat = o.wcl<3?"室內機":o.wcl<5?"後院機/電滑翔":o.wcl<7?"公園機/教練機"
+    :o.wcl<10?"運動機":o.wcl<14?"進階運動/像真":o.wcl<17?"專家像真/EDF":"重型";
+  c.push([o.wcl<10?"ok":"warn","WCL 立方翼載",fmt(o.wcl),"分級："+wclCat+"（新生建議 ≤7）"]);
+  c.push([o.clreq<=i.foilData.clCruise?"ok":"bad","巡航需求 CL",fmt(o.clreq,3),
+    o.clreq<=i.foilData.clCruise?"翼型巡航 CL "+i.foilData.clCruise+" 夠用"
+    :"超過翼型巡航 CL "+i.foilData.clCruise+"——加大機翼、減重或飛快一點"]);
+  c.push([o.margin>=1.3?"ok":"bad","巡航速度餘裕 V/Vs",fmt(o.margin),
+    o.margin>=1.3?"離失速夠遠（≥1.3）":"太貼近失速速度！加大機翼或減重"]);
+  c.push([o.re>=100000?"ok":o.re>=50000?"warn":"bad","巡航雷諾數",Math.round(o.re).toLocaleString(),
+    o.re>=100000?"翼型正常工作區":o.re>=50000?"過渡帶：務必用低雷諾數翼型（SD7037 系）":"低於臨界帶（4~5萬）：翼弦太短或飛太慢，CLmax 會崩"]);
+  rng(o.vh,0.30,0.60,"Vh 水平尾容積","太小俯仰飄、太大尾巴重");
+  rng(o.vv,0.02,0.05,"Vv 垂直尾容積","太小會擺尾（荷蘭滾）、太大盤旋不穩");
+  rng(o.sm,0.05,0.15,"靜穩定裕度 SM","<0.05 神經質難飛；>0.20 遲鈍、抬頭配平重");
+  c.push([o.B>=5?"ok":o.B>=3?"warn":"bad","B 螺旋穩定",fmt(o.B),
+    o.B>=5?"放手自穩":o.B>=3?"副翼機可接受（3~5）":"螺旋不穩：加上反角"]);
+  if(i.vtype!=="V") c.push([o.vvb>=0.10&&o.vvb<=0.20?"ok":"warn","Vv·B 舵轉權威",fmt(o.vvb,3),
+    "只對無副翼機重要；0.10 勉強、0.20 很有力"]);
+  if(i.motorW>0){
+    const p = o.wkg<110?["bad","恐飛不動（<50W/lb）"]:o.wkg<155?["ok","慢速/滑翔夠用"]
+      :o.wkg<200?["ok","練習機級"]:o.wkg<245?["ok","運動機級"]:["ok","特技/3D 級"];
+    c.push([p[0],"功率負載",Math.round(o.wkg)+" W/kg",p[1]]);
+  }
+  if(i.thrust>0){
+    const p = o.tr<0.4?["bad","爬升吃力"]:o.tr<0.6?["warn","滑翔/慢速夠用"]
+      :o.tr<0.8?["ok","教練/運動 OK"]:o.tr<1.1?["ok","很有勁"]:["ok","垂直性能級"];
+    c.push([p[0],"靜推重比",fmt(o.tr),p[1]]);
+  }
+  return c;
+}
+function fmt(v,d){ return Number(v).toFixed(d===undefined?2:d); }
+
+/* ---------- xlsx 產生（store-only zip；EXPORT 契約與 WingForge 解析器對齊） ---------- */
+function xmlEsc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function cellXml(ref,v){
+  if(typeof v==="number" && isFinite(v)) return `<c r="${ref}"><v>${v}</v></c>`;
+  return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+}
+function colName(n){let s="";while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=(n-m-1)/26}return s}
+function sheetXml(rows){
+  // rows: array of array（null 跳格）
+  let body="";
+  rows.forEach((row,ri)=>{
+    if(!row){return}
+    let cellsX="";
+    row.forEach((v,ci)=>{ if(v!==null&&v!==undefined) cellsX+=cellXml(colName(ci+1)+(ri+1),v); });
+    if(cellsX) body+=`<row r="${ri+1}">${cellsX}</row>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
+    `<sheetData>${body}</sheetData></worksheet>`;
+}
+function buildWorkbook(sheets){ // sheets: [{name, rows}]
+  const files={};
+  files["[Content_Types].xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+   `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`+
+   `<Default Extension="xml" ContentType="application/xml"/>`+
+   `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`+
+   `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`+
+   sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")+
+   `</Types>`;
+  files["_rels/.rels"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+   `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  files["xl/workbook.xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+   `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `+
+   `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>`+
+   sheets.map((s,i)=>`<sheet name="${xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")+
+   `</sheets></workbook>`;
+  files["xl/_rels/workbook.xml.rels"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+   `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+   sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")+
+   `</Relationships>`;
+  sheets.forEach((s,i)=>{ files[`xl/worksheets/sheet${i+1}.xml`]=sheetXml(s.rows); });
+  return files;
+}
+/* store-only zip */
+const _CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;
+  for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=_CRC[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function makeZip(files){
+  const enc=new TextEncoder();const parts=[];const central=[];let off=0;
+  const names=Object.keys(files);
+  for(const name of names){
+    const data=enc.encode(files[name]); const nameB=enc.encode(name);
+    const crc=crc32(data);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,0,true);lh.setUint16(10,0,true);lh.setUint16(12,0,true);
+    lh.setUint32(14,crc,true);lh.setUint32(18,data.length,true);lh.setUint32(22,data.length,true);
+    lh.setUint16(26,nameB.length,true);lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),nameB,data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);
+    ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);
+    ch.setUint32(16,crc,true);ch.setUint32(20,data.length,true);ch.setUint32(24,data.length,true);
+    ch.setUint16(28,nameB.length,true);
+    ch.setUint32(42,off,true);
+    central.push(new Uint8Array(ch.buffer),nameB);
+    off+=30+nameB.length+data.length;
+  }
+  let cdSize=0; central.forEach(p=>cdSize+=p.length);
+  const eo=new DataView(new ArrayBuffer(22));
+  eo.setUint32(0,0x06054b50,true);eo.setUint16(8,names.length,true);eo.setUint16(10,names.length,true);
+  eo.setUint32(12,cdSize,true);eo.setUint32(16,off,true);
+  const total=off+cdSize+22;const out=new Uint8Array(total);let p=0;
+  for(const part of [...parts,...central,new Uint8Array(eo.buffer)]){out.set(part,p);p+=part.length}
+  return out;
+}
+
+/* ---------- 由輸入組出整本 xlsx（EXPORT 契約） ---------- */
+function buildXlsxBytes(i,o,fileName){
+  const B=(b)=> b?"TRUE":"FALSE";
+  const exportRows=[
+    ["EXPORT_VERSION",1,null,"由填表精靈產生（值已算好，非公式）"],
+    ["design.name",fileName],
+    ["wing.airfoil",i.foilData.name],
+    ["wing.mirror","TRUE"],
+    ["wing.te_gap_mm",i.tegap],
+    ["wing.center_gap_mm",i.gap],
+    ["wing.twist_pivot",0.25],
+    ["wing.smooth","FALSE"],
+    ["wing.tip_round","FALSE"],
+    ["htail.airfoil",TAIL_FOIL.name],
+    ["htail.le_x_mm",o.htailLeX],
+    ["vtail.type",i.vtype==="V"?"V":"conventional"],
+    ["vtail.le_x_mm",o.vtailLeX],
+    ["vtail.vee_angle_deg",o.veeAngle],
+    null,
+    ["STATIONS_MAIN"],
+    ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"],
+    [0,0,i.chord,i.incidence,0,0],
+    [1,o.halfspan,o.ct,i.incidence-i.washout,0.25*(i.chord-o.ct),i.dihedral],
+    null,
+    ["STATIONS_HTAIL"],
+    ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"],
+    [0,0,o.chRoot,0,0,0],
+    [1,o.bh*1000/2,o.chTip,0,0.25*(o.chRoot-o.chTip),0],
+    null,
+    ["STATIONS_VTAIL"],
+    ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"],
+    [0,0,o.cvRoot,0,0,0],
+    [1,o.bv*1000,o.cvTip,0,0.25*(o.cvRoot-o.cvTip),0],
+  ];
+  const airfoilRows=[
+    ["翼型庫對照（.dat 放 wingforge/airfoils/）"],
+    ["翼型名稱","dat 檔名","來源連結","備註"],
+    ...FOILS.map(f=>[f.name,f.dat,f.url,f.note]),
+    [TAIL_FOIL.name,"","","尾翼用；NACA 四位數免 dat"],
+  ];
+  const inputRows=[
+    ["填表精靈輸入紀錄（值）"],["項目","值","單位"],
+    ["機型",PRESETS[i.preset].label,""],["最大起飛重量",i.mtow,"g"],
+    ["巡航速度",i.v,"m/s"],["根弦長",i.chord,"mm"],["翼展",i.span,"mm"],
+    ["漸縮比",i.taper,""],["上反角",i.dihedral,"deg"],["洗出",i.washout,"deg"],
+    ["裝置角",i.incidence,"deg"],["後緣厚度",i.tegap,"mm"],["機身寬",i.gap,"mm"],
+    ["主翼翼型",i.foilData.name,""],["CLmax",i.foilData.clmax,""],
+    ["巡航CL",i.foilData.clCruise,""],
+    ["機頭距離",i.noseC,"chord"],["尾翼距離",i.tailC,"chord"],["重心位置",i.xcg,"MAC比"],
+    ["平尾面積比",i.shr,""],["平尾AR",i.arh,""],["垂尾面積比",i.svr,""],
+    ["垂尾AR",i.arv,""],["尾翼構型",i.vtype,""],
+    ["馬達功率",i.motorW,"W"],["靜推力",i.thrust,"g"],
+  ];
+  const calcRows=[["計算結果紀錄（值）"],["項目","值","判定"],
+    ...checks(i,o).map(c=>[c[1],c[2],(c[0]==="ok"?"✓ ":"⚠ ")+c[3]])];
+  const files=buildWorkbook([
+    {name:"EXPORT",rows:exportRows},
+    {name:"AIRFOILS",rows:airfoilRows},
+    {name:"INPUT",rows:inputRows},
+    {name:"CALC",rows:calcRows},
+  ]);
+  return makeZip(files);
+}
+/* node 測試掛鉤 */
+if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,PRESETS,FOILS};}
+</script>
+
+<!-- ======================= UI 區 ======================= -->
+<script>
+"use strict";
+const $=q=>document.querySelector(q);
+const state={ preset:"trainer", step:0,
+  ...JSON.parse(JSON.stringify(PRESETS.trainer.d)) };
+{ const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
+  state.clmax=f0.clmax; state.clcruise=f0.clCruise; }
+
+function inputs(){
+  const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
+  const fd={...f0, clmax:state.clmax||f0.clmax, clCruise:state.clcruise||f0.clCruise};
+  return {...state, foilData:fd};
+}
+const STEPS=[
+ {id:"type", title:"選機型", render:rType},
+ {id:"weight", title:"重量速度", render:rWeight},
+ {id:"wing", title:"主翼", render:rWing},
+ {id:"foil", title:"翼型", render:rFoil},
+ {id:"layout", title:"機身佈局", render:rLayout},
+ {id:"tail", title:"尾翼", render:rTail},
+ {id:"power", title:"動力", render:rPower},
+ {id:"final", title:"總檢查產出", render:rFinal},
+];
+
+function badge(label,val,lvl,tip){
+  return `<span class="badge ${lvl||""}" title="${tip||""}">${label} <b>${val}</b></span>`;
+}
+function liveBadges(keys){
+  const i=inputs(), o=compute(i), cs=checks(i,o);
+  const pick=cs.filter(c=>keys.includes(c[1]));
+  return `<div class="badges">${pick.map(c=>
+    badge(c[1],c[2],c[0]==="ok"?"ok":c[0],c[3])).join("")}</div>`;
+}
+function field(key,label,unit,hint,attrs){
+  return `<div class="field"><label>${label}</label>
+    <input type="number" id="f_${key}" value="${state[key]}" ${attrs||""}
+      oninput="upd('${key}',this.value)"><span class="unit">${unit||""}</span>
+    ${hint?`<div class="hint">${hint}</div>`:""}</div>`;
+}
+function upd(key,val){ const n=parseFloat(val); if(isFinite(n)) state[key]=n; refreshLive(); }
+function refreshLive(){
+  document.querySelectorAll("[data-live]").forEach(el=>{
+    el.innerHTML=liveBadges(JSON.parse(el.dataset.live));
+  });
+  const fin=$("#finalTable"); if(fin) renderFinalTable();
+}
+
+/* ---------- 各步 ---------- */
+function rType(){
+  return `<div class="card"><h2><span class="no">STEP 1</span>你要做哪種飛機？</h2>
+  <div class="lead">選一個最接近的，精靈會幫你把所有欄位填成該機型的合理起點——之後每一步都可以改。</div>
+  <div class="presets">${Object.entries(PRESETS).map(([k,p])=>
+    `<div class="preset ${state.preset===k?"sel":""}" onclick="pickPreset('${k}')">
+     <h3>${p.label}</h3><p>${p.desc}</p></div>`).join("")}</div>
+  <div class="hint">💡 新生第一台強烈建議「練習機」：翼載低、上反角大、自穩性好，摔了也便宜。</div></div>`;
+}
+function pickPreset(k){
+  state.preset=k; Object.assign(state,JSON.parse(JSON.stringify(PRESETS[k].d)));
+  state.foil=PRESETS[k].d.foil;
+  const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
+  state.clmax=f0.clmax; state.clcruise=f0.clCruise;
+  render();
+}
+function rWeight(){
+  return `<div class="card"><h2><span class="no">STEP 2</span>多重？飛多快？</h2>
+  <div class="lead">全備重＝機體＋電池＋接收機＋馬達全部加起來。不確定就抓大一點，飛機只會越做越重。</div>
+  <div class="grid2">
+  ${field("mtow","最大起飛重量","g","練習機 500~900g、公園機 300~500g")}
+  ${field("v","巡航速度","m/s","練習機 10~13、慢速 8~10、運動 14~18（1 m/s = 3.6 km/h）")}
+  </div>
+  <div data-live='["巡航速度餘裕 V/Vs","WCL 立方翼載"]'></div></div>`;
+}
+function rWing(){
+  return `<div class="card"><h2><span class="no">STEP 3</span>主翼幾何</h2>
+  <div class="lead">看著下面的即時徽章調：目標是 <b>WCL ≤7、展弦比 4.5~7.5、雷諾數 >10 萬</b> 全綠。</div>
+  <div class="grid2">
+  ${field("chord","根弦長","mm","翼根前後寬度；越大雷諾數越高、越好飛")}
+  ${field("span","翼展（含機身）","mm","")}
+  ${field("taper","漸縮比（梢弦/根弦）","","1=矩形翼最好做；0.6~0.8 兼顧效率與翼尖失速","step=0.05 min=0.3 max=1")}
+  ${field("dihedral","上反角","deg","副翼機 2~3°；無副翼靠方向舵轉向要 5~8°","step=0.5")}
+  ${field("washout","洗出（翼尖減攻角）","deg","1~2° 讓翼尖晚失速、失速變溫和","step=0.5")}
+  ${field("incidence","裝置角","deg","翼根安裝攻角，1~3° 常見","step=0.5")}
+  ${field("gap","機身寬","mm","兩半翼中間留給機身的空間")}
+  ${field("tegap","後緣最小厚度","mm","3D 列印給 0.5~1；傳統做法填 0","step=0.5")}
+  </div>
+  <div data-live='["展弦比","WCL 立方翼載","巡航雷諾數","巡航需求 CL"]'></div></div>`;
+}
+function rFoil(){
+  const i=inputs(),o=compute(i);
+  const reTxt=Math.round(o.re).toLocaleString();
+  const clsOf=p=>({trainer:"trainer",park:"park",sport:"sport",glider:"glider"}[p]);
+  const sorted=[...FOILS].sort((a,b)=>
+    (b.cls.includes(clsOf(state.preset))?1:0)-(a.cls.includes(clsOf(state.preset))?1:0));
+  return `<div class="card"><h2><span class="no">STEP 4</span>選翼型</h2>
+  <div class="lead">翼型＝機翼的剖面形狀，決定「能產生多少升力、什麼時候失速」。你的巡航雷諾數是
+  <b style="font-family:Consolas,monospace">${reTxt}</b>——之後查任何翼型數據，都要看<b>接近這個 Re</b> 的曲線才作數。
+  卡片已按你的機型把推薦排前面（★）：</div>
+  <div class="foilcards">${sorted.map(f=>{
+    const rec=f.cls.includes(clsOf(state.preset));
+    return `<div class="foil ${state.foil===f.name?"sel":""}" onclick="pickFoil('${f.name}')">
+      <h4>${rec?"★ ":""}${f.name}</h4><p>${f.note}</p>
+      <span class="tag ${f.have?"":"dl"}">${f.dat===""?"內建公式，免檔案":f.have?"repo 已附 dat":"需下載 dat"}</span>
+    </div>`;}).join("")}</div>
+  <details class="teach"><summary>📚 教學：怎麼自己查翼型數據（airfoiltools 三分鐘上手）</summary>
+    <ol>
+      <li>打開 <a href="http://airfoiltools.com" target="_blank">airfoiltools.com</a>，搜尋翼型名稱進入詳情頁。</li>
+      <li>頁面下方有各雷諾數的極線圖連結，<b>挑最接近 ${reTxt} 的那組</b>（如 Re 100,000 或 200,000）。</li>
+      <li><b>CLmax（最大升力係數）</b>：看「Cl vs Alpha」曲線的<b>最高點</b>——頂點的 Cl 值就是 CLmax，對應的角度就是失速攻角。</li>
+      <li><b>巡航 CL</b>：看「Cl/Cd vs Alpha」曲線<b>最高點往前 1~3°</b> 的位置，回到 Cl 曲線讀那個攻角的 Cl 值——這是效率最好的巡航區。</li>
+      <li>把讀到的值填進下面欄位（選卡片時已幫你填入該翼型的典型值，自己查過更準）。</li>
+    </ol></details>
+  <div class="grid2">
+  ${field("clmax","CLmax 最大升力係數","","決定失速速度；平底翼型約 1.2~1.4","step=0.05")}
+  ${field("clcruise","巡航 CL（最大升阻比附近）","","巡航需求 CL 必須小於它","step=0.05")}
+  </div>
+  <div data-live='["巡航需求 CL","巡航速度餘裕 V/Vs","巡航雷諾數"]'></div></div>`;
+}
+function pickFoil(name){
+  state.foil=name;
+  const f=FOILS.find(x=>x.name===name);
+  state.clmax=f.clmax; state.clcruise=f.clCruise;
+  render();
+}
+function rLayout(){
+  return `<div class="card"><h2><span class="no">STEP 5</span>機身佈局與重心</h2>
+  <div class="lead">重心（CG）是全機最重要的一個數字。目標：<b>靜穩定裕度 SM 落在 0.05~0.15</b>（綠燈）。</div>
+  <div class="grid2">
+  ${field("noseC","機頭 → 主翼前緣","倍弦長","1 ~ 1.5 倍平均弦長","step=0.05")}
+  ${field("tailC","主翼後緣 → 尾翼後緣","倍弦長","2 ~ 3 倍；越長尾翼可以越小","step=0.05")}
+  ${field("xcg","重心位置（MAC 比例）","","0.30~0.35 起手；調到 SM 綠燈為止。做出來後用手指頂翼下實測！","step=0.005")}
+  </div>
+  <div data-live='["靜穩定裕度 SM"]'></div>
+  <div class="hint">📐 SM = 中性點 − 重心。重心一定要在中性點<b>前面</b>；本精靈用 MIT 公式估中性點，之後可用 xflr5 精算回填。</div></div>`;
+}
+function rTail(){
+  return `<div class="card"><h2><span class="no">STEP 6</span>尾翼</h2>
+  <div class="lead">尾翼是飛機的「羽毛」。目標：<b>Vh 0.30~0.60、Vv 0.02~0.05</b> 綠燈。</div>
+  <div class="grid2">
+  ${field("shr","平尾面積比 Sh/S","","0.15~0.25 常見","step=0.01")}
+  ${field("arh","平尾展弦比","","2~5","step=0.5")}
+  ${field("th","平尾漸縮比","","","step=0.05")}
+  ${field("svr","垂尾面積比 Sv/S","","0.06~0.12 常見","step=0.01")}
+  ${field("arv","垂尾展弦比","","1~2","step=0.1")}
+  ${field("tv","垂尾漸縮比","","","step=0.05")}
+  </div>
+  <div class="field"><label>尾翼構型</label>
+    <select id="f_vtype" onchange="state.vtype=this.value;refreshLive()">
+      <option value="conventional" ${state.vtype!=="V"?"selected":""}>傳統十字尾（垂尾要自己手動建）</option>
+      <option value="V" ${state.vtype==="V"?"selected":""}>V 型尾（Fusion 全自動生成）</option>
+    </select>
+    <div class="hint">V 尾夾角與面積由公式自動換算（NACA R-823 法＋7.5% 補償）。</div></div>
+  <div data-live='["Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威"]'></div></div>`;
+}
+function rPower(){
+  return `<div class="card"><h2><span class="no">STEP 7</span>動力（選填）</h2>
+  <div class="lead">還沒選馬達可以先填 0 跳過；有數字就能驗證「飛得動、爬得上去」。</div>
+  <div class="grid2">
+  ${field("motorW","馬達全油門功率","W","看馬達規格表或瓦特計實測")}
+  ${field("thrust","動力組靜推力","g","馬達+槳的靜推力；廠標或用廚房秤實測")}
+  </div>
+  <div data-live='["功率負載","靜推重比"]'></div></div>`;
+}
+function rFinal(){
+  const today=new Date();
+  const d=today.getFullYear()+String(today.getMonth()+1).padStart(2,"0")+String(today.getDate()).padStart(2,"0");
+  if(!state._fname) state._fname=d+"_我的"+PRESETS[state.preset].label;
+  return `<div class="card"><h2><span class="no">STEP 8</span>總檢查 → 產生設計表</h2>
+  <div class="lead">全部綠燈最理想；⚠ 黃字代表「可以飛，但要知道自己在取捨什麼」。</div>
+  <div id="finalTable"></div>
+  <div class="field" style="margin-top:.8rem"><label>檔案名稱</label>
+    <input type="text" id="f_fname" value="${state._fname}" style="max-width:20rem"
+      oninput="state._fname=this.value"><span class="unit">.xlsx</span></div>
+  <button class="btn primary big" onclick="doGenerate()">📄 產生 xlsx 設計表</button>
+  <div id="afterGen" class="fusion-steps hidden">
+    <h3>🛩️ 接下來：去 Fusion 360 長出飛機</h3>
+    <ol>
+      <li>把剛下載的 <code>.xlsx</code> 放到任何位置（建議放專案資料夾）。</li>
+      <li>開 Fusion 360 → 工具列 <b>公用程式 &gt; Scripts and Add-Ins</b> → WingForge <b>Run</b>（已在跑就 Stop→Run 一次）。</li>
+      <li><b>實體 &gt; 建立 &gt; 從表格生成</b> → 選你的 xlsx → 看預覽 → 確定。</li>
+      <li>主翼＋水平尾就長出來了，每支都能用 <b>修改 &gt; Edit Wing</b> 再調（先點選特徵）。</li>
+      <li id="datHint"></li>
+      <li>傳統十字尾的<b>垂直尾翼</b>要自己建：訊息框會給你根弦/梢弦/高度，畫正面草圖拉伸即可（V 尾構型則全自動）。</li>
+    </ol>
+  </div></div>`;
+}
+function renderFinalTable(){
+  const i=inputs(),o=compute(i),cs=checks(i,o);
+  $("#finalTable").innerHTML=`<table class="check">`+cs.map(c=>
+    `<tr><td>${c[1]}</td><td class="v-${c[0]}">${c[2]}</td><td class="v-${c[0]}">${c[0]==="ok"?"✓":"⚠"}</td><td>${c[3]}</td></tr>`).join("")+`</table>`;
+}
+function doGenerate(){
+  const i=inputs(),o=compute(i);
+  const fname=(state._fname||"design").replace(/[\\/:*?"<>|]/g,"")+".xlsx";
+  const bytes=buildXlsxBytes(i,o,fname);
+  const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=fname; a.click();
+  URL.revokeObjectURL(a.href);
+  const box=$("#afterGen"); box.classList.remove("hidden");
+  const f=i.foilData;
+  $("#datHint").innerHTML = f.dat===""
+    ? `你的主翼翼型 <code>${f.name}</code> 是 NACA 四位數，<b>免下載</b>任何檔案。`
+    : f.have
+    ? `你的主翼翼型 <code>${f.name}</code> 的 <code>${f.dat}</code> repo 已附在 <code>wingforge/airfoils/</code>，不用動。`
+    : `⚠ 你的主翼翼型 <code>${f.name}</code> 需要 .dat 檔：到 <a href="${f.url}" target="_blank">airfoiltools</a> 頁面點 <b>Selig format dat file</b> 下載，存成 <code>wingforge/airfoils/${f.dat}</code> 再匯入。`;
+  box.scrollIntoView({behavior:"smooth"});
+}
+
+/* ---------- 導覽 ---------- */
+function render(){
+  $("#stepbar").innerHTML=STEPS.map((s,i)=>
+    `<button class="${i===state.step?"cur":i<state.step?"done":""}"
+      onclick="go(${i})">${i<state.step?"✓ ":""}${s.title}</button>`).join("");
+  $("#stepHost").innerHTML=STEPS[state.step].render();
+  refreshLive();
+  $("#btnPrev").style.visibility=state.step===0?"hidden":"visible";
+  $("#btnNext").style.visibility=state.step===STEPS.length-1?"hidden":"visible";
+  window.scrollTo({top:0});
+}
+function go(i){state.step=i;render()}
+$("#btnPrev").onclick=()=>{if(state.step>0)go(state.step-1)};
+$("#btnNext").onclick=()=>{if(state.step<STEPS.length-1)go(state.step+1)};
+render();
+</script>
+</body>
+</html>
