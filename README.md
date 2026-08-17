@@ -40,15 +40,19 @@ YYYYMMDD_姓名_機名.xlsx   （例：20260817_小明_2米練習機.xlsx）
 
 ## 🪶 foils.json — 全社團共用翼型庫
 
-精靈的翼型清單從本 repo 的 [`foils.json`](foils.json) 載入（GitHub Pages 同源 fetch）。
-要新增翼型給所有人用：
+精靈的翼型清單從本 repo 的 [`foils.json`](foils.json) 載入（GitHub Pages 同源 fetch），
+`.dat` 座標檔放本 repo 的 `airfoils/`（Fusion 匯入器缺檔時會自動從這裡下載）。
 
-1. 在精靈「翼型」步按「➕ 新增翼型」填好 → 會給你一段 JSON 片段與編輯連結
-2. 把 `.dat` 檔 commit 進 `wingforge/airfoils/`
-3. 把 JSON 片段貼進 `foils.json` 陣列尾端 commit → 全社團即刻看到
+**新增翼型＝開一個 Issue，不用會 git**：
 
-（沒 commit 的自訂翼型只在當次瀏覽器工作階段有效，重新整理就消失——這是刻意設計，
-共用資產一律走 GitHub 留紀錄。）
+1. 精靈「翼型」步按「➕ 新增翼型」填好 → 按「🚀 一鍵上傳到社團翼型庫」
+2. 開出的 GitHub Issue 已預填好，照指示把 .dat 內容貼進指定區塊、送出
+3. 機器人（[new-airfoil workflow](.github/workflows/new-airfoil.yml)）自動驗證
+   → 自動 commit `foils.json`＋`airfoils/` → 回覆並關閉 Issue → 全社團即刻可用
+
+只需要 GitHub 帳號（開 Issue 不需要任何 repo 權限）。驗證沒過機器人會留言說明原因，
+修改內文後 Close→Reopen 重新觸發。幹部也可直接編輯 foils.json。
+（沒上傳的自訂翼型只在當次瀏覽器工作階段有效——共用資產一律走 GitHub 留紀錄。）
 
 ## 🛠 維護
 

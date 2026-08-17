@@ -1,0 +1,61 @@
+name: 翼型上傳機器人
+
+# 新生開「[翼型] 」開頭的 Issue（精靈會產生預填好的連結）→ 本 workflow
+# 解析內文、驗證、自動 commit 進 foils.json 與 airfoils/，回覆並關閉 Issue。
+# 開 Issue 只需要 GitHub 帳號、不需要 repo 權限、不用會 git。
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  add-airfoil:
+    if: startsWith(github.event.issue.title, '[翼型]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse issue and write files
+        id: parse
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set +e
+          OUT=$(node scripts/add_airfoil.js)
+          CODE=$?
+          set -e
+          {
+            echo "message<<WFEOF"
+            echo "$OUT"
+            echo "WFEOF"
+            echo "ok=$([ $CODE -eq 0 ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.parse.outputs.ok == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add foils.json airfoils/
+          git commit -m "feat: add airfoil via issue #${{ github.event.issue.number }} by airfoil-bot"
+          git push
+
+      - name: Reply and close issue
+        uses: actions/github-script@v7
+        env:
+          MSG: ${{ steps.parse.outputs.message }}
+          OK: ${{ steps.parse.outputs.ok }}
+        with:
+          script: |
+            const {MSG, OK} = process.env;
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number: context.issue.number, body: MSG });
+            if (OK === 'true') {
+              await github.rest.issues.update({
+                ...context.repo, issue_number: context.issue.number,
+                state: 'closed', state_reason: 'completed' });
+            }
