@@ -285,6 +285,16 @@ function compute(i){
 /* ---------- 檢核（回傳 [等級, 訊息]；等級 ok/warn/bad） ---------- */
 function checks(i,o){
   const c=[];
+  // 疑似打錯的輸入（單位/少打一個 0）——比紅燈更早點名病因
+  const typo=[];
+  if(i.chord<60) typo.push(`根弦 ${i.chord}mm 比麥克筆還窄（常見 150~300mm，是不是少打 0？）`);
+  if(i.chord>700) typo.push(`根弦 ${i.chord}mm 快跟門一樣寬（是不是多打 0？）`);
+  if(i.span<300) typo.push(`翼展 ${i.span}mm 只有一個手掌大`);
+  if(i.span>0&&i.chord>0&&i.span<i.chord*1.5) typo.push("翼展比根弦還短——單位是不是填反了？");
+  if(i.mtow<80) typo.push(`重量 ${i.mtow}g 比手機還輕（單位是公克）`);
+  if(i.mtow>20000) typo.push(`重量 ${i.mtow}g 超過 20kg`);
+  if(i.v<4||i.v>60) typo.push(`巡航速度 ${i.v} m/s 超出常理（單位是 m/s，不是 km/h）`);
+  if(typo.length) c.push(["bad","輸入檢查","⚠", typo.join("；")]);
   const rng=(v,lo,hi,name,why)=> c.push(
     v>=lo&&v<=hi ? ["ok",name,fmt(v),"落在建議 "+lo+"~"+hi]
                  : ["warn",name,fmt(v),"建議 "+lo+"~"+hi+"："+why]);
@@ -593,7 +603,7 @@ function rWeight(){
   ${field("mtow","最大起飛重量","g","練習機 500~900g、公園機 300~500g")}
   ${field("v","巡航速度","m/s","練習機 10~13、慢速 8~10、運動 14~18（1 m/s = 3.6 km/h）")}
   </div>
-  <div data-live='["巡航速度餘裕 V/Vs","WCL 立方翼載"]'></div></div>`;
+  <div data-live='["輸入檢查","巡航速度餘裕 V/Vs","WCL 立方翼載"]'></div></div>`;
 }
 function rWing(){
   return `<div class="card"><h2><span class="no">STEP 3</span>主翼幾何</h2>
@@ -608,7 +618,7 @@ function rWing(){
   ${field("gap","機身寬","mm","兩半翼中間留給機身的空間")}
   ${field("tegap","後緣最小厚度","mm","3D 列印給 0.5~1；傳統做法填 0","step=0.5")}
   </div>
-  <div data-live='["展弦比","WCL 立方翼載","巡航雷諾數","巡航需求 CL"]'></div></div>`;
+  <div data-live='["輸入檢查","展弦比","WCL 立方翼載","巡航雷諾數","巡航需求 CL"]'></div></div>`;
 }
 function rFoil(){
   const i=inputs(),o=compute(i);
