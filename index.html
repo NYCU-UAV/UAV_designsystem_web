@@ -53,6 +53,29 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .card h2{font-size:1.15rem;margin-bottom:.2rem;display:flex;align-items:baseline;gap:.5rem}
 .card h2 .no{font:700 1rem Consolas,monospace;color:var(--accent);letter-spacing:.05em}
 .lead{color:var(--ink2);font-size:.92rem;margin-bottom:.9rem}
+/* 全流程地圖 */
+.flowmap{display:flex;gap:.3rem;margin:0 0 1rem;font-size:.8rem;flex-wrap:wrap}
+.flowmap div{
+  flex:1 1 8rem;border:1.5px solid var(--line);border-radius:.4rem;
+  background:#fffdf6;padding:.35rem .5rem;color:var(--ink2);
+}
+.flowmap div.now{border-color:var(--accent);background:#fdf3e4;color:var(--ink);font-weight:700}
+.flowmap div b{display:block;font-size:.86rem}
+/* 每步的「目標 / 看什麼」 */
+.goal{
+  border-left:4px solid var(--accent);background:#fdf6e9;border-radius:.35rem;
+  padding:.5rem .75rem;margin:0 0 .9rem;font-size:.9rem;
+}
+.goal .g1{font-weight:700;color:var(--ink)}
+.goal .g2{color:var(--ink2);margin-top:.2rem}
+.goal .g2 b{color:var(--ok)}
+/* 紅黃燈自救表 */
+details.fixit{border:1.5px dashed var(--bad);border-radius:.5rem;padding:.55rem .8rem;
+  margin:.7rem 0;background:#fdf0ee}
+details.fixit summary{cursor:pointer;font-weight:700;color:var(--bad)}
+details.fixit table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.4rem}
+details.fixit td{border-bottom:1px solid #e8d5d0;padding:.3rem .25rem;vertical-align:top}
+details.fixit td:first-child{white-space:nowrap;font-weight:700;color:var(--ink)}
 /* 欄位 */
 .field{margin-bottom:.9rem}
 .field label{display:block;font-weight:700;font-size:.95rem;margin-bottom:.15rem}
@@ -132,6 +155,7 @@ code{font-family:Consolas,monospace;background:#efe6cd;border-radius:.25rem;padd
   每一步都有即時檢核，<b>綠色✓代表落在「好飛」的經驗區間</b>；出現⚠不是錯，是提醒你想清楚。</div>
 </header>
 
+<div class="flowmap" id="flowmap"></div>
 <div class="steps" id="stepbar"></div>
 <div id="stepHost"></div>
 
@@ -701,6 +725,45 @@ const STEPS=[
  {id:"final", title:"總檢查產出", render:rFinal},
 ];
 
+/* 全流程地圖：讓新生隨時知道「整件事有多長、我在哪」 */
+const FLOW=[
+ {t:"① 填表", d:"在這個網頁決定飛機的每個尺寸（STEP 1~7）", steps:[0,1,2,3,4,5,6]},
+ {t:"② xflr5 驗證", d:"免費軟體算出真實氣動性能，把 XNP 填回來（STEP 8）", steps:[7]},
+ {t:"③ 產生設計表", d:"下載 xlsx，這是你的設計正本（STEP 9）", steps:[8]},
+ {t:"④ Fusion 建模", d:"匯入 xlsx，機翼自動長出來、之後可隨時改參數", steps:[]},
+];
+function renderFlow(){
+  $("#flowmap").innerHTML=FLOW.map(f=>
+    `<div class="${f.steps.includes(state.step)?"now":""}"><b>${f.t}</b>${f.d}</div>`).join("");
+}
+/* 每步開頭的「這步在決定什麼 / 填完看哪個燈」 */
+function goal(what,watch){
+  return `<div class="goal"><div class="g1">🎯 這步在決定：${what}</div>`+
+    (watch?`<div class="g2">✅ 填完看下面的徽章：${watch}</div>`:"")+`</div>`;
+}
+/* 紅黃燈自救表——徽章的 tooltip 要 hover 才看得到，這裡攤開來寫 */
+const FIXES=[
+ ["WCL 太高","飛機相對機翼太重＝飛很快、摔很兇。加大機翼（弦長或翼展）或減重。"],
+ ["展弦比偏低","滑翔效率差。翼展加長或弦長減短（但弦長太短雷諾數會掉）。"],
+ ["展弦比偏高","翼樑要夠強否則會折。滑翔機本來就高，此檢核只針對動力教練/運動機。"],
+ ["雷諾數 &lt;10 萬","翼弦太短或飛太慢，翼型性能會崩。加大根弦長最有效。"],
+ ["巡航需求 CL 超過翼型","飛不起來。加大機翼、減重、或飛快一點。"],
+ ["速度餘裕 &lt;1.3","巡航速度太貼近失速。同上三招。"],
+ ["SM 太小(&lt;0.05)","很神經質、難飛。重心往前移（數字調小）。"],
+ ["SM 太大(&gt;0.15)","反應遲鈍、配平阻力大。重心往後移（數字調大）。"],
+ ["Vh 不足","俯仰會飄。加大平尾面積比，或把尾翼距離拉長。"],
+ ["Vv 不足","會擺尾（荷蘭滾）。加大垂尾面積比或拉長尾距。"],
+ ["B &lt;3","螺旋不穩、放手會越轉越斜。加大上反角。"],
+ ["尾力臂 ≤30mm","尾距設太小或尾翼弦太大，回 STEP 5 加大「主翼後緣→尾翼後緣」。"],
+ ["功率/推重比不足","馬達太小。換大一點的動力組，或把飛機做輕。"],
+ ["輸入檢查","單位或位數打錯了（如根弦 25mm）。照提示改回常理範圍。"],
+];
+function fixTable(){
+  return `<details class="fixit"><summary>🚨 出現 ⚠ 或紅字怎麼辦？（點開對照）</summary>
+   <table>${FIXES.map(f=>`<tr><td>${f[0]}</td><td>${f[1]}</td></tr>`).join("")}</table>
+   <div class="hint" style="margin-top:.4rem">提醒：⚠ 不等於做錯——它是說「你正在取捨，確認你知道自己在做什麼」。
+   紅字才是真的飛不起來或打錯字。</div></details>`;
+}
 function badge(label,val,lvl,tip){
   return `<span class="badge ${lvl||""}" title="${tip||""}">${label} <b>${val}</b></span>`;
 }
@@ -737,7 +800,9 @@ function refreshLive(){
 /* ---------- 各步 ---------- */
 function rType(){
   return `<div class="card"><h2><span class="no">STEP 1</span>你要做哪種飛機？</h2>
-  <div class="lead">選一個最接近的，精靈會幫你把所有欄位填成該機型的合理起點——之後每一步都可以改。</div>
+  ${goal("這台飛機的定位——它會決定後面 20 幾個欄位的起始值",
+   "選完直接按「下一步」，之後每一格都能自己改")}
+  <div class="lead">不用怕選錯：機型只是幫你把所有欄位填成合理起點，後面每一步都可以微調。</div>
   <div class="presets">${Object.entries(PRESETS).map(([k,p])=>
     `<div class="preset ${state.preset===k?"sel":""}" onclick="pickPreset('${k}')">
      <h3>${p.label}</h3><p>${p.desc}</p></div>`).join("")}</div>
@@ -754,7 +819,11 @@ function pickPreset(k){
 }
 function rWeight(){
   return `<div class="card"><h2><span class="no">STEP 2</span>多重？飛多快？</h2>
-  <div class="lead">全備重＝機體＋電池＋接收機＋馬達全部加起來。不確定就抓大一點，飛機只會越做越重。</div>
+  ${goal("飛機多重、要飛多快——這兩個數字決定機翼要做多大",
+   "<b>速度餘裕 ≥1.3</b>（離失速夠遠）")}
+  <div class="lead"><b>全備重</b>＝機體＋電池＋接收機＋馬達＋舵機，全部加起來。
+  不確定就抓大一點——飛機只會越做越重，估太輕之後會發現機翼不夠大。
+  <b>巡航速度</b>是你希望它平常飛多快（1 m/s＝3.6 km/h，練習機 10~13 m/s 大約是慢跑速度）。</div>
   <div class="grid2">
   ${field("mtow","最大起飛重量","g","練習機 500~900g、公園機 300~500g")}
   ${field("v","巡航速度","m/s","練習機 10~13、慢速 8~10、運動 14~18（1 m/s = 3.6 km/h）")}
@@ -763,7 +832,10 @@ function rWeight(){
 }
 function rWing(){
   return `<div class="card"><h2><span class="no">STEP 3</span>主翼幾何</h2>
-  <div class="lead">看著下面的即時徽章調：目標是 <b>WCL ≤7、展弦比 4.5~7.5、雷諾數 >10 萬</b> 全綠。</div>
+  ${goal("機翼的實際尺寸與形狀——全機最重要的一步",
+   "<b>WCL ≤7、展弦比 4.5~7.5、雷諾數 >10 萬</b> 全綠")}
+  <div class="lead">改任何一格，下面的徽章會立刻重算。先調<b>根弦長</b>和<b>翼展</b>把前三個徽章弄綠，
+  再處理上反角那些細節。看不懂徽章在說什麼就點開下面的自救表。</div>
   <div class="grid2">
   ${field("chord","根弦長","mm","翼根前後寬度；越大雷諾數越高、越好飛")}
   ${field("span","翼展（含機身）","mm","")}
@@ -774,7 +846,8 @@ function rWing(){
   ${field("gap","機身寬","mm","兩半翼中間留給機身的空間")}
   ${field("tegap","後緣最小厚度","mm","3D 列印給 0.5~1；傳統做法填 0","step=0.5")}
   </div>
-  <div data-live='["輸入檢查","展弦比","WCL 立方翼載","巡航雷諾數","巡航需求 CL"]'></div></div>`;
+  <div data-live='["輸入檢查","展弦比","WCL 立方翼載","巡航雷諾數","巡航需求 CL"]'></div>
+  ${fixTable()}</div>`;
 }
 function rFoil(){
   const i=inputs(),o=compute(i);
@@ -783,7 +856,9 @@ function rFoil(){
   const sorted=[...allFoils(state.customFoils)].sort((a,b)=>
     ((b.cls||[]).includes(clsOf(state.preset))?1:0)-((a.cls||[]).includes(clsOf(state.preset))?1:0));
   return `<div class="card"><h2><span class="no">STEP 4</span>選翼型</h2>
-  <div class="lead">翼型＝機翼的剖面形狀，決定「能產生多少升力、什麼時候失速」。你的巡航雷諾數是
+  ${goal("機翼的剖面形狀——決定能產生多少升力、什麼時候失速",
+   "<b>巡航需求 CL 不超過翼型的巡航 CL</b>")}
+  <div class="lead">翼型＝機翼切開的剖面。你的巡航雷諾數是
   <b style="font-family:Consolas,monospace">${reTxt}</b>——之後查任何翼型數據，都要看<b>接近這個 Re</b> 的曲線才作數。
   卡片已按你的機型把推薦排前面（★）：</div>
   <div class="foilcards">${sorted.map(f=>{
@@ -950,7 +1025,11 @@ function delFoil(name){
 }
 function rLayout(){
   return `<div class="card"><h2><span class="no">STEP 5</span>機身佈局與重心</h2>
-  <div class="lead">重心（CG）是全機最重要的一個數字。目標：<b>靜穩定裕度 SM 落在 0.05~0.15</b>（綠燈）。</div>
+  ${goal("重心位置與尾翼要放多遠——決定飛機穩不穩、好不好操縱",
+   "<b>靜穩定裕度 SM 落在 0.05~0.15</b>")}
+  <div class="lead">重心（CG）是全機最重要的一個數字：太前面遲鈍、太後面會失控。
+  這裡先用公式估，之後 STEP 8 用 xflr5 算出真值再回來校正。
+  <b>做出實機後一定要用手指頂在翼下實測重心</b>，跟這裡的數字對照。</div>
   <div class="grid2">
   ${field("noseC","機頭 → 主翼前緣","倍弦長","1 ~ 1.5 倍平均弦長","step=0.05")}
   ${field("tailC","主翼後緣 → 尾翼後緣","倍弦長","2 ~ 3 倍；越長尾翼可以越小","step=0.05")}
@@ -1014,13 +1093,20 @@ function rTail(){
     (T==="box"?`<div class="hint">◻ 上封板＝垂尾頂端一片矩形板（弦＝垂尾梢弦），只算結構。</div>`:"");
   }
   return `<div class="card"><h2><span class="no">STEP 6</span>尾翼</h2>
-  <div class="lead">先選構型，再填該構型需要的參數。目標：<b>Vh 0.30~0.60、Vv 0.02~0.05</b> 綠燈。</div>
+  ${goal("尾翼的樣式與大小——飛機的「羽毛」，管穩定與轉向",
+   "<b>Vh 0.30~0.60、Vv 0.02~0.05</b>（尾容積係數）")}
+  <div class="lead">先選構型（五種都能在 Fusion 自動生成），欄位會跟著換成該構型需要的。
+  Vh/Vv 是「尾翼面積 × 力臂」的無因次值——同樣的穩定效果，尾巴拉長就可以做小一點。</div>
   ${cards}${fields}
-  <div data-live='["尾力臂","Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威"]'></div></div>`;
+  <div data-live='["尾力臂","Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威"]'></div>
+  ${fixTable()}</div>`;
 }
 function rPower(){
   return `<div class="card"><h2><span class="no">STEP 7</span>動力（選填）</h2>
-  <div class="lead">還沒選馬達可以先填 0 跳過；有數字就能驗證「飛得動、爬得上去」。</div>
+  ${goal("動力夠不夠——驗證這台飛機「飛得動、爬得上去」",
+   "<b>功率負載</b>與<b>靜推重比</b>的分級")}
+  <div class="lead">還沒選馬達就<b>兩格都填 0 直接跳過</b>，不影響機翼設計。
+  有數字的話：功率看馬達規格表（全油門瓦數），靜推力可以把飛機動力組架在廚房秤上實測。</div>
   <div class="grid2">
   ${field("motorW","馬達全油門功率","W","看馬達規格表或瓦特計實測")}
   ${field("thrust","動力組靜推力","g","馬達+槳的靜推力；廠標或用廚房秤實測")}
@@ -1034,7 +1120,9 @@ function rXflr5(){
   const E=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
   const foilName=i.foilData.name;
   return `<div class="card"><h2><span class="no">STEP 8</span>xflr5 驗證（強烈建議）</h2>
-  <div class="lead">精靈的中性點（XNP）與穩定裕度是<b>公式初估</b>；xflr5 用你的實際幾何免費精算。
+  ${goal("用免費軟體 xflr5 驗證這台飛機真的會飛、並把中性點量出來",
+   "四張圖的判讀結果，以及填回 XNP 後的 SM")}
+  <div class="lead">前面的中性點（XNP）是<b>公式初估</b>；xflr5 會用你的實際幾何算出真值。
   跑完把 XNP 填回下面欄位，總檢查會自動改用實測值。沒空跑也能直接產表，但首飛前跑一輪最保險。</div>
   <div class="badges">
     <span class="badge">分析雷諾數 <b>${reTxt}</b></span>
@@ -1121,7 +1209,11 @@ function rFinal(){
   const d=today.getFullYear()+String(today.getMonth()+1).padStart(2,"0")+String(today.getDate()).padStart(2,"0");
   if(!state._fname) state._fname=d+"_我的"+PRESETS[state.preset].label;
   return `<div class="card"><h2><span class="no">STEP 9</span>總檢查 → 產生設計表</h2>
-  <div class="lead">全部綠燈最理想；⚠ 黃字代表「可以飛，但要知道自己在取捨什麼」。</div>
+  ${goal("最後確認所有檢核，然後產出設計表 xlsx",
+   "整張表——全綠最理想")}
+  <div class="lead">⚠ 黃字代表「可以飛，但要知道自己在取捨什麼」；紅字代表真的有問題要回去改。
+  下載的 xlsx 就是你的<b>設計正本</b>：Fusion 靠它建模，也建議 commit 進社團的
+  <code>designs/</code> 存檔給學弟妹參考。</div>
   <div id="finalTable"></div>
   <div class="field" style="margin-top:.8rem"><label>檔案名稱</label>
     <input type="text" id="f_fname" value="${state._fname}" style="max-width:20rem"
@@ -1183,6 +1275,7 @@ function doGenerate(){
 
 /* ---------- 導覽 ---------- */
 function render(){
+  renderFlow();
   $("#stepbar").innerHTML=STEPS.map((s,i)=>
     `<button class="${i===state.step?"cur":i<state.step?"done":""}"
       onclick="go(${i})">${i<state.step?"✓ ":""}${s.title}</button>`).join("");
