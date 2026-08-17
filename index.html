@@ -172,6 +172,7 @@ const FOILS = [
   url:"http://airfoiltools.com/airfoil/details?airfoil=s1223-il"},
 ];
 const TAIL_FOIL = {name:"NACA 0008", dat:""};
+function allFoils(custom){ return FOILS.concat(custom||[]); }
 
 /* ---------- 機型預設 ---------- */
 const PRESETS = {
@@ -451,7 +452,7 @@ function buildXlsxBytes(i,o,fileName){
   const airfoilRows=[
     ["翼型庫對照（.dat 放 wingforge/airfoils/）"],
     ["翼型名稱","dat 檔名","來源連結","備註"],
-    ...FOILS.map(f=>[f.name,f.dat,f.url,f.note]),
+    ...allFoils(i.customFoils).map(f=>[f.name,f.dat,f.url||"",f.note||""]),
     [TAIL_FOIL.name,"","","尾翼用；NACA 四位數免 dat"],
   ];
   const inputRows=[
@@ -479,7 +480,7 @@ function buildXlsxBytes(i,o,fileName){
   return makeZip(files);
 }
 /* node 測試掛鉤 */
-if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,PRESETS,FOILS};}
+if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,PRESETS,FOILS,allFoils};}
 </script>
 
 <!-- ======================= UI 區 ======================= -->
@@ -504,8 +505,14 @@ function ensureVeeDefaults(){
   }
 }
 
+state.customFoils=(()=>{ try{return JSON.parse(localStorage.getItem("wf_custom_foils")||"[]")}
+  catch(e){return []} })();
+function saveCustomFoils(){ try{localStorage.setItem("wf_custom_foils",
+  JSON.stringify(state.customFoils))}catch(e){} }
+
 function inputs(){
-  const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
+  const pool=allFoils(state.customFoils);
+  const f0=pool.find(f=>f.name===state.foil)||pool[0];
   const fd={...f0, clmax:state.clmax||f0.clmax, clCruise:state.clcruise||f0.clCruise};
   return {...state, foilData:fd};
 }
@@ -600,18 +607,36 @@ function rFoil(){
   const i=inputs(),o=compute(i);
   const reTxt=Math.round(o.re).toLocaleString();
   const clsOf=p=>({trainer:"trainer",park:"park",sport:"sport",glider:"glider"}[p]);
-  const sorted=[...FOILS].sort((a,b)=>
-    (b.cls.includes(clsOf(state.preset))?1:0)-(a.cls.includes(clsOf(state.preset))?1:0));
+  const sorted=[...allFoils(state.customFoils)].sort((a,b)=>
+    ((b.cls||[]).includes(clsOf(state.preset))?1:0)-((a.cls||[]).includes(clsOf(state.preset))?1:0));
   return `<div class="card"><h2><span class="no">STEP 4</span>選翼型</h2>
   <div class="lead">翼型＝機翼的剖面形狀，決定「能產生多少升力、什麼時候失速」。你的巡航雷諾數是
   <b style="font-family:Consolas,monospace">${reTxt}</b>——之後查任何翼型數據，都要看<b>接近這個 Re</b> 的曲線才作數。
   卡片已按你的機型把推薦排前面（★）：</div>
   <div class="foilcards">${sorted.map(f=>{
-    const rec=f.cls.includes(clsOf(state.preset));
+    const rec=(f.cls||[]).includes(clsOf(state.preset));
+    const del=f.custom?`<span style="float:right;cursor:pointer" title="刪除自訂翼型"
+      onclick="event.stopPropagation();delFoil('${f.name}')">🗑</span>`:"";
     return `<div class="foil ${state.foil===f.name?"sel":""}" onclick="pickFoil('${f.name}')">
-      <h4>${rec?"★ ":""}${f.name}</h4><p>${f.note}</p>
-      <span class="tag ${f.have?"":"dl"}">${f.dat===""?"內建公式，免檔案":f.have?"repo 已附 dat":"需下載 dat"}</span>
-    </div>`;}).join("")}</div>
+      <h4>${rec?"★ ":""}${f.name}${del}</h4><p>${f.note||"自訂翼型"}</p>
+      <span class="tag ${f.have?"":"dl"}">${f.dat===""?"內建公式，免檔案":f.have?"repo 已附 dat":"需自備 dat"}</span>
+    </div>`;}).join("")}
+    <div class="foil" onclick="$('#newFoilForm').classList.toggle('hidden')" style="border-style:dashed">
+      <h4>➕ 新增翼型</h4><p>清單沒有你要的？自己加一個（存在這台瀏覽器）</p></div>
+  </div>
+  <div id="newFoilForm" class="hidden" style="border:1.5px dashed var(--blue);border-radius:.5rem;padding:.7rem .8rem;margin:.5rem 0;background:#eef2f6">
+    <b>新增自訂翼型</b>
+    <div class="hint" style="margin-bottom:.5rem">① 到 <a href="http://airfoiltools.com" target="_blank">airfoiltools</a> 找到翼型
+    → 下載 <b>Selig format dat file</b> → 放進 <code>wingforge/airfoils/</code> 資料夾；
+    ② 下面填「一樣的檔名」＋從極線圖讀出的兩個係數（讀法見上面教學）。NACA 四位數（如 NACA 3412）免檔案，檔名留空即可。</div>
+    <div class="grid2">
+      <div class="field"><label>翼型名稱</label><input type="text" id="nf_name" placeholder="例：S3021"></div>
+      <div class="field"><label>dat 檔名（放在 airfoils/ 內）</label><input type="text" id="nf_dat" placeholder="例：s3021.dat；NACA 四位數留空"></div>
+      <div class="field"><label>CLmax</label><input type="number" id="nf_clmax" value="1.2" step="0.05"></div>
+      <div class="field"><label>巡航 CL</label><input type="number" id="nf_clc" value="0.7" step="0.05"></div>
+    </div>
+    <button class="btn" onclick="addFoil()">加入並選用</button>
+  </div>
   <details class="teach"><summary>📚 教學：怎麼自己查翼型數據（airfoiltools 三分鐘上手）</summary>
     <ol>
       <li>打開 <a href="http://airfoiltools.com" target="_blank">airfoiltools.com</a>，搜尋翼型名稱進入詳情頁。</li>
@@ -628,8 +653,31 @@ function rFoil(){
 }
 function pickFoil(name){
   state.foil=name;
-  const f=FOILS.find(x=>x.name===name);
+  const f=allFoils(state.customFoils).find(x=>x.name===name);
   state.clmax=f.clmax; state.clcruise=f.clCruise;
+  render();
+}
+function addFoil(){
+  const name=($("#nf_name").value||"").trim();
+  let dat=($("#nf_dat").value||"").trim();
+  const clmax=parseFloat($("#nf_clmax").value), clc=parseFloat($("#nf_clc").value);
+  if(!name){alert("翼型名稱必填");return}
+  if(allFoils(state.customFoils).some(f=>f.name===name)){alert("這個名稱已存在");return}
+  const isNaca=/^NACA\s*\d{4}$/i.test(name);
+  if(!isNaca && !dat){alert("非 NACA 四位數需要填 dat 檔名（並把檔案放進 airfoils/）");return}
+  if(isNaca) dat="";
+  state.customFoils.push({name, dat, have:false, custom:true, cls:[],
+    clmax:clmax||1.2, clCruise:clc||0.7,
+    note:"自訂翼型"+(dat?`（需把 ${dat} 放進 airfoils/）`:"（NACA 內建公式）")});
+  saveCustomFoils();
+  state.foil=name; state.clmax=clmax||1.2; state.clcruise=clc||0.7;
+  render();
+}
+function delFoil(name){
+  state.customFoils=state.customFoils.filter(f=>f.name!==name);
+  saveCustomFoils();
+  if(state.foil===name){ state.foil=FOILS[0].name;
+    state.clmax=FOILS[0].clmax; state.clcruise=FOILS[0].clCruise; }
   render();
 }
 function rLayout(){
@@ -740,6 +788,23 @@ function rXflr5(){
       <li><b>讀 XNP</b>：跑 Stability analysis（Type 7），或看 Polar 資料裡的 Neutral Point——
         換算成「距主翼前緣的弦長比」填回下面。</li>
     </ol></details>
+  <details class="teach"><summary>🔁 看完 xflr5 要回來「迭代」哪些參數（重要！）</summary>
+    <ol>
+      <li><b>XNP 讀到了</b> → 填進下面的欄位（弦長比），SM 自動改用實測值。</li>
+      <li><b>Cm vs α 的過零點不在巡航攻角附近</b>（例：巡航該在 4° 但 Cm=0 落在 8°）→
+        回 <a href="javascript:go(2)">主翼</a> 步調 <b>裝置角</b>：過零攻角太大→裝置角加大、太小→減小，
+        一次動 0.5° 慢慢逼近。</li>
+      <li><b>SM 太大/太小</b> → 回 <a href="javascript:go(4)">機身佈局</a> 步<b>先動重心位置</b>
+        （每 0.01 動一格），不要急著改尾翼大小。</li>
+      <li><b>α=0 時 Cl≤0</b>（平飛要抬很大機頭）→ 裝置角太小或翼型太對稱，
+        回 <a href="javascript:go(2)">主翼</a>／<a href="javascript:go(3)">翼型</a> 步。</li>
+      <li><b>Cl/Cd 峰值攻角離巡航攻角很遠</b> → 回 <a href="javascript:go(1)">重量速度</a> 步調巡航速度，
+        或換翼型。</li>
+      <li><b>在 xflr5 挪過尾翼位置</b> → 把最終位置抄回 <a href="javascript:go(4)">機身佈局</a> 步的
+        <b>位置覆寫欄</b>，讓 Fusion 生成的機跟 xflr5 驗證的是同一台。</li>
+      <li>每改完一輪 → 重跑 xflr5 確認 → 到 <a href="javascript:go(8)">總檢查</a> 重新產 xlsx →
+        Fusion 重新匯入（或對既有特徵 Edit Wing 改參數）。通常 2~3 輪就收斂。</li>
+    </ol></details>
   <div class="grid2">
   ${field("xnpX","xflr5 實測 XNP（弦長比；0＝還沒跑）","","例：XNP 在 43% MAC 就填 0.43；填入後 SM 檢核自動改用實測值","step=0.005")}
   </div>
@@ -786,11 +851,13 @@ function doGenerate(){
   URL.revokeObjectURL(a.href);
   const box=$("#afterGen"); box.classList.remove("hidden");
   const f=i.foilData;
+  const foilSrc = f.url ? `<a href="${f.url}" target="_blank">airfoiltools</a>`
+                        : `<a href="http://airfoiltools.com" target="_blank">airfoiltools 搜尋 ${f.name}</a>`;
   $("#datHint").innerHTML = f.dat===""
     ? `你的主翼翼型 <code>${f.name}</code> 是 NACA 四位數，<b>免下載</b>任何檔案。`
     : f.have
     ? `你的主翼翼型 <code>${f.name}</code> 的 <code>${f.dat}</code> repo 已附在 <code>wingforge/airfoils/</code>，不用動。`
-    : `⚠ 你的主翼翼型 <code>${f.name}</code> 需要 .dat 檔：到 <a href="${f.url}" target="_blank">airfoiltools</a> 頁面點 <b>Selig format dat file</b> 下載，存成 <code>wingforge/airfoils/${f.dat}</code> 再匯入。`;
+    : `⚠ 你的主翼翼型 <code>${f.name}</code> 需要 .dat 檔：到 ${foilSrc} 頁面點 <b>Selig format dat file</b> 下載，存成 <code>wingforge/airfoils/${f.dat}</code> 再匯入（檔名要一字不差）。`;
   box.scrollIntoView({behavior:"smooth"});
 }
 
