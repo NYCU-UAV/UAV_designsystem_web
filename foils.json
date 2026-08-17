@@ -1,0 +1,89 @@
+[
+ {
+  "name": "Clark Y",
+  "dat": "clarky.dat",
+  "have": true,
+  "cls": [
+   "trainer",
+   "park"
+  ],
+  "clmax": 1.3,
+  "aoaStall": 12,
+  "clCruise": 0.8,
+  "aoaCruise": 4,
+  "note": "平底經典練習翼型，好做好飛，repo 已附檔",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=clarky-il"
+ },
+ {
+  "name": "SD7037",
+  "dat": "sd7037.dat",
+  "have": true,
+  "cls": [
+   "glider",
+   "park"
+  ],
+  "clmax": 1.25,
+  "aoaStall": 11,
+  "clCruise": 0.7,
+  "aoaCruise": 4,
+  "note": "低雷諾數滑翔名翼型（Selig 設計），repo 已附檔",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=sd7037-il"
+ },
+ {
+  "name": "AG35",
+  "dat": "ag35.dat",
+  "have": true,
+  "cls": [
+   "glider"
+  ],
+  "clmax": 1.2,
+  "aoaStall": 10,
+  "clCruise": 0.65,
+  "aoaCruise": 3,
+  "note": "Drela 設計的滑翔翼型，薄而低阻，repo 已附檔",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=ag35-il"
+ },
+ {
+  "name": "NACA 2412",
+  "dat": "",
+  "have": true,
+  "cls": [
+   "sport",
+   "trainer"
+  ],
+  "clmax": 1.25,
+  "aoaStall": 13,
+  "clCruise": 0.7,
+  "aoaCruise": 4,
+  "note": "半對稱萬用翼型；NACA 四位數免下載（程式內建公式）",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=naca2412-il"
+ },
+ {
+  "name": "NACA 0012",
+  "dat": "",
+  "have": true,
+  "cls": [
+   "sport"
+  ],
+  "clmax": 1.1,
+  "aoaStall": 13,
+  "clCruise": 0.5,
+  "aoaCruise": 4,
+  "note": "對稱翼型，正倒飛一樣；特技取向。免下載",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=naca0012-il"
+ },
+ {
+  "name": "S1223",
+  "dat": "s1223.dat",
+  "have": false,
+  "cls": [
+   "lift"
+  ],
+  "clmax": 1.85,
+  "aoaStall": 10,
+  "clCruise": 1.2,
+  "aoaCruise": 5,
+  "note": "超高升力（載重挑戰用）；阻力大、需下載 .dat",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=s1223-il"
+ }
+]

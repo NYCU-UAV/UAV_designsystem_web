@@ -172,7 +172,11 @@ const FOILS = [
   url:"http://airfoiltools.com/airfoil/details?airfoil=s1223-il"},
 ];
 const TAIL_FOIL = {name:"NACA 0008", dat:""};
-function allFoils(custom){ return FOILS.concat(custom||[]); }
+// 翼型庫：正式來源是 repo 的 foils.json（GitHub 上人人可 PR 擴充）；
+// 上面的 FOILS 只是 fetch 不到時的內建後備（file:// 開啟、離線）。
+let LIB_FOILS = FOILS;
+function setFoilLibrary(list){ if(Array.isArray(list)&&list.length) LIB_FOILS=list; }
+function allFoils(custom){ return LIB_FOILS.concat(custom||[]); }
 
 /* ---------- 機型預設 ---------- */
 const PRESETS = {
@@ -505,10 +509,13 @@ function ensureVeeDefaults(){
   }
 }
 
-state.customFoils=(()=>{ try{return JSON.parse(localStorage.getItem("wf_custom_foils")||"[]")}
-  catch(e){return []} })();
-function saveCustomFoils(){ try{localStorage.setItem("wf_custom_foils",
-  JSON.stringify(state.customFoils))}catch(e){} }
+state.customFoils=[];   // 本次工作階段的臨時翼型；永久共用走 GitHub foils.json
+const FOILS_JSON_EDIT_URL =
+  "https://github.com/NYCU-UAV/UAV_designsystem_web/edit/main/foils.json";
+// 啟動時抓 repo 的共用翼型庫（GitHub Pages 同源；file:// 抓不到就用內建後備）
+fetch("foils.json").then(r=>r.ok?r.json():null).then(list=>{
+  if(list){ setFoilLibrary(list); render(); }
+}).catch(()=>{});
 
 function inputs(){
   const pool=allFoils(state.customFoils);
@@ -622,8 +629,21 @@ function rFoil(){
       <span class="tag ${f.have?"":"dl"}">${f.dat===""?"內建公式，免檔案":f.have?"repo 已附 dat":"需自備 dat"}</span>
     </div>`;}).join("")}
     <div class="foil" onclick="$('#newFoilForm').classList.toggle('hidden')" style="border-style:dashed">
-      <h4>➕ 新增翼型</h4><p>清單沒有你要的？自己加一個（存在這台瀏覽器）</p></div>
+      <h4>➕ 新增翼型</h4><p>清單沒有你要的？自己加一個（本次立即可用；要全社團共用再一鍵上 GitHub）</p></div>
   </div>
+  ${state._shareFoilJson?`<div style="border:2px solid var(--ok);border-radius:.5rem;padding:.7rem .8rem;margin:.5rem 0;background:#eef5ee">
+    <b>✅ 已加入本次清單。要讓全社團永久看到（建議做）：</b>
+    <ol style="padding-left:1.3rem;font-size:.88rem;margin:.3rem 0">
+      <li>把 .dat 檔 commit 到 <code>wingforge/airfoils/</code>（或交給有權限的幹部）。</li>
+      <li>點 <a href="${FOILS_JSON_EDIT_URL}" target="_blank">編輯 foils.json</a>，把下面片段貼進陣列最後一個 <code>}</code> 之後、<code>]</code> 之前，commit 即上線：</li>
+    </ol>
+    <textarea readonly style="width:100%;height:7rem;font:.78rem Consolas,monospace;border:1px solid var(--line);border-radius:.3rem;padding:.3rem"
+      onclick="this.select()">${state._shareFoilJson.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</textarea>
+    <button class="btn" style="font-size:.85rem;padding:.25rem .8rem;margin-top:.3rem"
+      onclick="navigator.clipboard&&navigator.clipboard.writeText(state._shareFoilJson);this.textContent='已複製 ✓'">複製 JSON</button>
+    <button class="btn" style="font-size:.85rem;padding:.25rem .8rem;margin-top:.3rem"
+      onclick="state._shareFoilJson=null;render()">關閉</button>
+  </div>`:""}
   <div id="newFoilForm" class="hidden" style="border:1.5px dashed var(--blue);border-radius:.5rem;padding:.7rem .8rem;margin:.5rem 0;background:#eef2f6">
     <b>新增自訂翼型</b>
     <div class="hint" style="margin-bottom:.5rem">① 到 <a href="http://airfoiltools.com" target="_blank">airfoiltools</a> 找到翼型
@@ -666,18 +686,20 @@ function addFoil(){
   const isNaca=/^NACA\s*\d{4}$/i.test(name);
   if(!isNaca && !dat){alert("非 NACA 四位數需要填 dat 檔名（並把檔案放進 airfoils/）");return}
   if(isNaca) dat="";
-  state.customFoils.push({name, dat, have:false, custom:true, cls:[],
+  const nf={name, dat, have:false, custom:true, cls:[],
     clmax:clmax||1.2, clCruise:clc||0.7,
-    note:"自訂翼型"+(dat?`（需把 ${dat} 放進 airfoils/）`:"（NACA 內建公式）")});
-  saveCustomFoils();
+    note:"自訂翼型"+(dat?`（需把 ${dat} 放進 airfoils/）`:"（NACA 內建公式）")};
+  state.customFoils.push(nf);
+  // 產生要貼進 GitHub foils.json 的片段（去掉 custom 標記）
+  const share={...nf}; delete share.custom;
+  state._shareFoilJson=JSON.stringify(share,null,1).replace(/^/,"") + ",";
   state.foil=name; state.clmax=clmax||1.2; state.clcruise=clc||0.7;
   render();
 }
 function delFoil(name){
   state.customFoils=state.customFoils.filter(f=>f.name!==name);
-  saveCustomFoils();
-  if(state.foil===name){ state.foil=FOILS[0].name;
-    state.clmax=FOILS[0].clmax; state.clcruise=FOILS[0].clCruise; }
+  if(state.foil===name){ const f0=allFoils()[0];
+    state.foil=f0.name; state.clmax=f0.clmax; state.clcruise=f0.clCruise; }
   render();
 }
 function rLayout(){

@@ -38,8 +38,22 @@ YYYYMMDD_姓名_機名.xlsx   （例：20260817_小明_2米練習機.xlsx）
   機器契約（`EXPORT_VERSION 1`）——**改 index.html 的產出格式前，先確認外掛端
   解析器同步更新**。
 
+## 🪶 foils.json — 全社團共用翼型庫
+
+精靈的翼型清單從本 repo 的 [`foils.json`](foils.json) 載入（GitHub Pages 同源 fetch）。
+要新增翼型給所有人用：
+
+1. 在精靈「翼型」步按「➕ 新增翼型」填好 → 會給你一段 JSON 片段與編輯連結
+2. 把 `.dat` 檔 commit 進 `wingforge/airfoils/`
+3. 把 JSON 片段貼進 `foils.json` 陣列尾端 commit → 全社團即刻看到
+
+（沒 commit 的自訂翼型只在當次瀏覽器工作階段有效，重新整理就消失——這是刻意設計，
+共用資產一律走 GitHub 留紀錄。）
+
 ## 🛠 維護
 
-- 純靜態單檔（`index.html`），無後端、無建置流程；改完 push 即上線。
+- 純靜態單檔（`index.html`）＋`foils.json` 翼型庫，無後端、無建置流程；改完 push 即上線。
 - xlsx 在瀏覽器端生成（自帶 minimal zip writer），數值為算好的常量
   （非公式），Fusion 端只讀值所以完全相容。
+- `index.html` 內建的 FOILS 陣列只是 foils.json 抓不到時的離線後備，兩邊不必嚴格同步，
+  以 foils.json 為準。
