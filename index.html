@@ -178,22 +178,22 @@ const PRESETS = {
  trainer:{label:"練習機", desc:"新生首選：慢、穩、摔得起",
   d:{mtow:700, v:12, chord:220, span:1200, taper:0.7, dihedral:5, washout:1,
      incidence:2, tegap:0, gap:60, foil:"Clark Y", noseC:1.25, tailC:2.5, xcg:0.35,
-     shr:0.15, arh:4, th:0.6, svr:0.08, arv:1.5, tv:0.6, vtype:"conventional",
+     shr:0.15, arh:4, th:0.6, svr:0.08, arv:1.5, tv:0.6, tailType:"cross",
      motorW:150, thrust:500}},
  park:{label:"公園慢速機", desc:"更輕更慢，小場地飛",
   d:{mtow:450, v:9, chord:200, span:1100, taper:0.8, dihedral:6, washout:1,
      incidence:2, tegap:0, gap:50, foil:"Clark Y", noseC:1.25, tailC:2.3, xcg:0.33,
-     shr:0.18, arh:4, th:0.7, svr:0.09, arv:1.5, tv:0.6, vtype:"conventional",
+     shr:0.18, arh:4, th:0.7, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
      motorW:100, thrust:350}},
  sport:{label:"運動機", desc:"會飛了之後的第二台",
   d:{mtow:1100, v:16, chord:240, span:1300, taper:0.65, dihedral:3, washout:1,
      incidence:1.5, tegap:0, gap:70, foil:"NACA 2412", noseC:1.3, tailC:2.6, xcg:0.33,
-     shr:0.16, arh:4, th:0.6, svr:0.08, arv:1.6, tv:0.6, vtype:"conventional",
+     shr:0.16, arh:4, th:0.6, svr:0.08, arv:1.6, tv:0.6, tailType:"cross",
      motorW:300, thrust:1000}},
  glider:{label:"電動滑翔機", desc:"追熱氣流、慢慢飄",
   d:{mtow:800, v:9, chord:180, span:2000, taper:0.6, dihedral:4, washout:1.5,
      incidence:2, tegap:0, gap:50, foil:"SD7037", noseC:1.2, tailC:2.8, xcg:0.36,
-     shr:0.12, arh:4.5, th:0.6, svr:0.07, arv:1.6, tv:0.6, vtype:"V",
+     shr:0.12, arh:4.5, th:0.6, svr:0.07, arv:1.6, tv:0.6, tailType:"vee",
      motorW:200, thrust:600}},
 };
 
@@ -217,32 +217,58 @@ function compute(i){
   o.vto = 1.2*o.vs; o.vapp = 1.3*o.vs;
   o.margin = V/o.vs;
   o.re = rho*V*(o.mac/1000)/mu;
-  // 水平尾
+  // ---- 尾翼幾何（依構型） ----
+  const T = i.tailType || "cross";
+  o.tailType = T;
+  // 傳統參數（cross/tee/hh/box；也是切到 vee 時自動換算的來源）
   o.sh = i.shr*o.S; o.bh = Math.sqrt(i.arh*o.sh);
   o.chAvg = o.sh/o.bh*1000;
   o.chRoot = o.chAvg*2/(1+i.th); o.chTip = o.chRoot*i.th;
-  o.lh = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*o.chAvg;
-  o.vh = o.sh*(o.lh/1000)/(o.S*o.mac/1000);
-  // 垂直尾
-  o.sv = i.svr*o.S; o.bv = Math.sqrt(i.arv*o.sv);
-  o.cvAvg = o.sv/o.bv*1000;
+  o.sv = i.svr*o.S;
+  o.finCount = (T==="hh"||T==="box") ? 2 : 1;
+  const svEach = o.sv/o.finCount;
+  o.bv = Math.sqrt(i.arv*svEach);                 // 單片 fin 高度 m
+  o.cvAvg = svEach/o.bv*1000;
   o.cvRoot = o.cvAvg*2/(1+i.tv); o.cvTip = o.cvRoot*i.tv;
-  o.lv = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*o.cvAvg;
-  o.vv = o.sv*(o.lv/1000)/(o.S*o.bproj);
+  if(T==="vee"){
+    const th = (i.veeAngle||35)*Math.PI/180;
+    o.veeCt = i.veeCr*i.veeTaper;
+    const panel = (i.veeCr+o.veeCt)/2*i.veeL/1e6;  // 單片斜面積 m²
+    o.veeArea = 2*panel;
+    o.shEff = o.veeArea*Math.cos(th)*Math.cos(th); // cos² 有效面積（NACA R-823）
+    o.svEff = o.veeArea*Math.sin(th)*Math.sin(th);
+    o.veeSpanY = i.veeL*Math.cos(th);              // 站位展向（投影）
+    o.tailAvgC = (i.veeCr+o.veeCt)/2;
+    o.arhEff = Math.pow(2*i.veeL/1000,2)/o.veeArea; // 展開面 AR（給 XNP 式）
+  } else {
+    o.shEff = o.sh; o.svEff = o.sv;
+    o.tailAvgC = o.chAvg; o.arhEff = i.arh;
+  }
+  // 力臂（重心→尾翼 1/4 弦；vee 用 V 尾自己的平均弦）
+  o.lh = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*(T==="vee"?o.tailAvgC:o.chAvg);
+  o.lv = o.mac*(1-i.xcg) + i.tailC*o.mac - 0.75*(T==="vee"?o.tailAvgC:o.cvAvg);
+  o.vh = o.shEff*(o.lh/1000)/(o.S*o.mac/1000);
+  o.vv = o.svEff*(o.lv/1000)/(o.S*o.bproj);
   // 穩定性
-  o.xnp = 0.25 + (1+2/o.AR)/(1+2/i.arh)*(1-4/(o.AR+2))*o.vh;
+  o.xnp = 0.25 + (1+2/o.AR)/(1+2/o.arhEff)*(1-4/(o.AR+2))*o.vh;
   o.sm = o.xnp - i.xcg;
   o.B = (o.lv/1000/o.bproj)*i.dihedral/o.clreq;
   o.vvb = o.vv*o.B;
-  // V 尾
-  o.veeAngle = Math.atan(Math.sqrt(o.sv/o.sh))*180/Math.PI;
-  o.veeArea = (o.sh+o.sv)*1.075;
-  o.veeSlant = Math.sqrt(o.veeArea*i.arh)/2*1000;
-  // 佈局
+  // 由傳統尾換算 vee 的建議值（切換構型時自動填入）
+  o.veeSuggestAngle = Math.atan(Math.sqrt(o.sv/o.sh))*180/Math.PI;
+  const veeAreaSug = (o.sh+o.sv)*1.075;
+  o.veeSuggestL = Math.sqrt(veeAreaSug*i.arh)/2*1000;
+  o.veeSuggestCr = (veeAreaSug/2)/(o.veeSuggestL/1000)*1000*2/(1+i.th);
+  // 佈局位置（>0 的覆寫值優先，0=自動）
   o.noseLE = i.noseC*o.avg;
   o.totalLen = (i.noseC+i.tailC)*o.avg + cr;
-  o.htailLeX = i.xcg*o.mac + o.lh - 0.25*o.chAvg;
-  o.vtailLeX = i.xcg*o.mac + o.lv - 0.25*o.cvAvg;
+  const autoHt = i.xcg*o.mac + o.lh - 0.25*(T==="vee"?o.tailAvgC:o.chAvg);
+  const autoFin = i.xcg*o.mac + o.lv - 0.25*(T==="vee"?o.tailAvgC:o.cvAvg);
+  o.htailLeX = (i.htailX>0) ? i.htailX : autoHt;
+  o.finLeX = (i.finX>0) ? i.finX : autoFin;
+  o.htailZ = (T==="tee") ? o.bv*1000 : 0;   // T 尾：平尾在 fin 頂
+  o.finY = (T==="hh"||T==="box") ? o.bh*1000/2 : 0;   // 雙垂尾在平尾兩端
+  o.boxTopZ = o.bv*1000;
   // 動力
   o.wkg = i.motorW>0 ? i.motorW/W : 0;
   o.tr = i.thrust>0 ? i.thrust/1000/W : 0;
@@ -266,12 +292,19 @@ function checks(i,o){
     o.margin>=1.3?"離失速夠遠（≥1.3）":"太貼近失速速度！加大機翼或減重"]);
   c.push([o.re>=100000?"ok":o.re>=50000?"warn":"bad","巡航雷諾數",Math.round(o.re).toLocaleString(),
     o.re>=100000?"翼型正常工作區":o.re>=50000?"過渡帶：務必用低雷諾數翼型（SD7037 系）":"低於臨界帶（4~5萬）：翼弦太短或飛太慢，CLmax 會崩"]);
-  rng(o.vh,0.30,0.60,"Vh 水平尾容積","太小俯仰飄、太大尾巴重");
-  rng(o.vv,0.02,0.05,"Vv 垂直尾容積","太小會擺尾（荷蘭滾）、太大盤旋不穩");
+  if(o.lh<=30||o.lv<=30){
+    c.push(["bad","尾力臂",fmt(Math.min(o.lh,o.lv),0)+" mm",
+      "力臂太短甚至為負——「主翼後緣→尾翼後緣」距離太小、或尾翼弦太大，"
+      +"回佈局那步把尾距加大"]);
+  }
+  rng(o.vh,0.30,0.60,"Vh 水平尾容積","太小俯仰飄、太大尾巴重"+
+    (o.tailType==="vee"?"（V 尾以 cos² 有效面積換算）":""));
+  rng(o.vv,0.02,0.05,"Vv 垂直尾容積","太小會擺尾（荷蘭滾）、太大盤旋不穩"+
+    (o.tailType==="vee"?"（V 尾以 sin² 有效面積換算）":""));
   rng(o.sm,0.05,0.15,"靜穩定裕度 SM","<0.05 神經質難飛；>0.20 遲鈍、抬頭配平重");
   c.push([o.B>=5?"ok":o.B>=3?"warn":"bad","B 螺旋穩定",fmt(o.B),
     o.B>=5?"放手自穩":o.B>=3?"副翼機可接受（3~5）":"螺旋不穩：加上反角"]);
-  if(i.vtype!=="V") c.push([o.vvb>=0.10&&o.vvb<=0.20?"ok":"warn","Vv·B 舵轉權威",fmt(o.vvb,3),
+  if(o.tailType!=="vee") c.push([o.vvb>=0.10&&o.vvb<=0.20?"ok":"warn","Vv·B 舵轉權威",fmt(o.vvb,3),
     "只對無副翼機重要；0.10 勉強、0.20 很有力"]);
   if(i.motorW>0){
     const p = o.wkg<110?["bad","恐飛不動（<50W/lb）"]:o.wkg<155?["ok","慢速/滑翔夠用"]
@@ -367,9 +400,10 @@ function makeZip(files){
 
 /* ---------- 由輸入組出整本 xlsx（EXPORT 契約） ---------- */
 function buildXlsxBytes(i,o,fileName){
-  const B=(b)=> b?"TRUE":"FALSE";
+  const T = i.tailType || "cross";
+  const HDR = ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"];
   const exportRows=[
-    ["EXPORT_VERSION",1,null,"由填表精靈產生（值已算好，非公式）"],
+    ["EXPORT_VERSION",2,null,"由填表精靈產生（值已算好，非公式）"],
     ["design.name",fileName],
     ["wing.airfoil",i.foilData.name],
     ["wing.mirror","TRUE"],
@@ -378,27 +412,38 @@ function buildXlsxBytes(i,o,fileName){
     ["wing.twist_pivot",0.25],
     ["wing.smooth","FALSE"],
     ["wing.tip_round","FALSE"],
-    ["htail.airfoil",TAIL_FOIL.name],
-    ["htail.le_x_mm",o.htailLeX],
-    ["vtail.type",i.vtype==="V"?"V":"conventional"],
-    ["vtail.le_x_mm",o.vtailLeX],
-    ["vtail.vee_angle_deg",o.veeAngle],
-    null,
-    ["STATIONS_MAIN"],
-    ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"],
-    [0,0,i.chord,i.incidence,0,0],
-    [1,o.halfspan,o.ct,i.incidence-i.washout,0.25*(i.chord-o.ct),i.dihedral],
-    null,
-    ["STATIONS_HTAIL"],
-    ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"],
-    [0,0,o.chRoot,0,0,0],
-    [1,o.bh*1000/2,o.chTip,0,0.25*(o.chRoot-o.chTip),0],
-    null,
-    ["STATIONS_VTAIL"],
-    ["idx","span_mm","chord_mm","twist_deg","sweep_mm","dihedral_deg"],
-    [0,0,o.cvRoot,0,0,0],
-    [1,o.bv*1000,o.cvTip,0,0.25*(o.cvRoot-o.cvTip),0],
+    ["tail.type",T],
+    ["tail.airfoil",TAIL_FOIL.name],
   ];
+  if(T==="vee"){
+    exportRows.push(["vee.le_x_mm",o.htailLeX]);
+  }else{
+    exportRows.push(
+      ["htail.le_x_mm",o.htailLeX],["htail.z_mm",o.htailZ],
+      ["fin.count",o.finCount],["fin.le_x_mm",o.finLeX],
+      ["fin.y_mm",o.finY],["fin.z_mm",0]);
+    if(T==="box") exportRows.push(
+      ["boxtop.le_x_mm",o.finLeX+0.25*(o.cvRoot-o.cvTip)],
+      ["boxtop.z_mm",o.boxTopZ]);
+  }
+  exportRows.push(null,["STATIONS_MAIN"],HDR,
+    [0,0,i.chord,i.incidence,0,0],
+    [1,o.halfspan,o.ct,i.incidence-i.washout,0.25*(i.chord-o.ct),i.dihedral]);
+  if(T==="vee"){
+    exportRows.push(null,["STATIONS_VEE"],HDR,
+      [0,0,i.veeCr,0,0,0],
+      [1,o.veeSpanY,o.veeCt,0,0.25*(i.veeCr-o.veeCt),i.veeAngle]);
+  }else{
+    exportRows.push(null,["STATIONS_HTAIL"],HDR,
+      [0,0,o.chRoot,0,0,0],
+      [1,o.bh*1000/2,o.chTip,0,0.25*(o.chRoot-o.chTip),0]);
+    exportRows.push(null,["STATIONS_FIN"],HDR,
+      [0,0,o.cvRoot,0,0,0],
+      [1,o.bv*1000,o.cvTip,0,0.25*(o.cvRoot-o.cvTip),0]);
+    if(T==="box") exportRows.push(null,["STATIONS_BOXTOP"],HDR,
+      [0,0,o.cvTip,0,0,0],
+      [1,o.bh*1000/2,o.cvTip,0,0,0]);
+  }
   const airfoilRows=[
     ["翼型庫對照（.dat 放 wingforge/airfoils/）"],
     ["翼型名稱","dat 檔名","來源連結","備註"],
@@ -415,7 +460,7 @@ function buildXlsxBytes(i,o,fileName){
     ["巡航CL",i.foilData.clCruise,""],
     ["機頭距離",i.noseC,"chord"],["尾翼距離",i.tailC,"chord"],["重心位置",i.xcg,"MAC比"],
     ["平尾面積比",i.shr,""],["平尾AR",i.arh,""],["垂尾面積比",i.svr,""],
-    ["垂尾AR",i.arv,""],["尾翼構型",i.vtype,""],
+    ["垂尾AR",i.arv,""],["尾翼構型",i.tailType,""],
     ["馬達功率",i.motorW,"W"],["靜推力",i.thrust,"g"],
   ];
   const calcRows=[["計算結果紀錄（值）"],["項目","值","判定"],
@@ -436,10 +481,23 @@ if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,PR
 <script>
 "use strict";
 const $=q=>document.querySelector(q);
-const state={ preset:"trainer", step:0,
+const state={ preset:"trainer", step:0, htailX:0, finX:0,
+  veeAngle:0, veeL:0, veeCr:0, veeTaper:0.7,
   ...JSON.parse(JSON.stringify(PRESETS.trainer.d)) };
 { const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
   state.clmax=f0.clmax; state.clcruise=f0.clCruise; }
+
+function ensureVeeDefaults(){
+  // 預設機型若是 V 尾（如滑翔機）而 V 參數還沒填：先用傳統尾參數換算
+  if(state.tailType==="vee" && !(state.veeAngle>0)){
+    const saved=state.tailType; state.tailType="cross";
+    const o=compute(inputs()); state.tailType=saved;
+    state.veeAngle=+o.veeSuggestAngle.toFixed(1);
+    state.veeL=+o.veeSuggestL.toFixed(0);
+    state.veeCr=+o.veeSuggestCr.toFixed(0);
+    state.veeTaper=state.th;
+  }
+}
 
 function inputs(){
   const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
@@ -477,6 +535,16 @@ function refreshLive(){
   document.querySelectorAll("[data-live]").forEach(el=>{
     el.innerHTML=liveBadges(JSON.parse(el.dataset.live));
   });
+  const ph=$("#posHint");
+  if(ph){
+    const o=compute(inputs());
+    let t=`📍 目前位置（主翼前緣=0）：平尾/V尾前緣 X≈<b>${o.htailLeX.toFixed(0)}mm</b>`;
+    if(state.tailType!=="vee") t+=`、垂尾前緣 X≈<b>${o.finLeX.toFixed(0)}mm</b>`;
+    if(o.htailZ>0) t+=`、平尾高度 Z=${o.htailZ.toFixed(0)}mm（T尾）`;
+    if(o.finY>0) t+=`、雙垂尾在 Y=±${o.finY.toFixed(0)}mm`;
+    t+=`；機身總長估 ${o.totalLen.toFixed(0)}mm`;
+    ph.innerHTML=t;
+  }
   const fin=$("#finalTable"); if(fin) renderFinalTable();
 }
 
@@ -494,6 +562,8 @@ function pickPreset(k){
   state.foil=PRESETS[k].d.foil;
   const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
   state.clmax=f0.clmax; state.clcruise=f0.clCruise;
+  state.htailX=0; state.finX=0; state.veeAngle=0;   // 位置回自動、V 參數重新換算
+  ensureVeeDefaults();
   render();
 }
 function rWeight(){
@@ -565,26 +635,66 @@ function rLayout(){
   ${field("xcg","重心位置（MAC 比例）","","0.30~0.35 起手；調到 SM 綠燈為止。做出來後用手指頂翼下實測！","step=0.005")}
   </div>
   <div data-live='["靜穩定裕度 SM"]'></div>
-  <div class="hint">📐 SM = 中性點 − 重心。重心一定要在中性點<b>前面</b>；本精靈用 MIT 公式估中性點，之後可用 xflr5 精算回填。</div></div>`;
+  <div class="hint" id="posHint"></div>
+  <div class="grid2">
+  ${field("htailX","平尾/V尾前緣位置（0＝自動）","mm","自動＝由上面的尾距換算；填非 0 值可手動指定")}
+  ${field("finX","垂尾前緣位置（0＝自動）","mm","同上；只影響垂直尾翼")}
+  </div>
+  <div class="hint">📐 SM = 中性點 − 重心。重心一定要在中性點<b>前面</b>；本精靈用 MIT 公式估中性點，之後可用 xflr5 精算回填。
+  位置座標系：主翼前緣＝X0，往機尾為正。</div></div>`;
+}
+const TAILTYPES=[
+ {k:"cross",label:"➕ 傳統十字尾",desc:"最好做、最好修，新生首選"},
+ {k:"tee",label:"⊤ T 尾",desc:"平尾在垂尾頂端，避開主翼尾流；尾巴略重"},
+ {k:"vee",label:"Ⅴ V 尾",desc:"兩片斜板兼兩職，阻力小；舵面要混控"},
+ {k:"hh",label:"Ⓗ H 尾",desc:"平尾兩端雙垂尾，方向舵效率好"},
+ {k:"box",label:"◻ 口字尾",desc:"H 尾＋上封板，剛性最高（封板算結構不算升力面）"},
+];
+function pickTail(k){
+  state.tailType=k;
+  if(k==="vee" && !(state.veeAngle>0)){
+    // 首次切到 V 尾：用目前的傳統尾參數自動換算（R-823 cos² 法＋7.5% 補償）
+    const o=compute(inputs());
+    state.veeAngle=+o.veeSuggestAngle.toFixed(1);
+    state.veeL=+o.veeSuggestL.toFixed(0);
+    state.veeCr=+o.veeSuggestCr.toFixed(0);
+    state.veeTaper=state.th;
+  }
+  render();
 }
 function rTail(){
+  const T=state.tailType||"cross";
+  const cards=`<div class="presets">${TAILTYPES.map(t=>
+    `<div class="preset ${T===t.k?"sel":""}" onclick="pickTail('${t.k}')">
+     <h3>${t.label}</h3><p>${t.desc}</p></div>`).join("")}</div>`;
+  let fields;
+  if(T==="vee"){
+    fields=`<div class="hint" style="margin-bottom:.5rem">✨ 切到 V 尾時已用傳統尾參數自動換算好；只要直接調
+      <b>夾角</b>和<b>單片</b>幾何，等效水平/垂直尾容積由 cos²/sin² 換算（NACA R-823）。</div>
+    <div class="grid2">
+    ${field("veeAngle","V 尾夾角（自水平面）","deg","常見 30~40°；越陡越偏「垂尾」","step=0.5")}
+    ${field("veeL","單片斜長（沿翼面量）","mm","","step=5")}
+    ${field("veeCr","單片根弦長","mm","","step=1")}
+    ${field("veeTaper","單片漸縮比","","","step=0.05")}
+    </div>`;
+  }else{
+    const finLabel = (T==="hh"||T==="box") ? "垂尾面積比 Sv/S（兩片合計）" : "垂尾面積比 Sv/S";
+    fields=`<div class="grid2">
+    ${field("shr","平尾面積比 Sh/S","","0.15~0.25 常見","step=0.01")}
+    ${field("arh","平尾展弦比","","2~5","step=0.5")}
+    ${field("th","平尾漸縮比","","","step=0.05")}
+    ${field("svr",finLabel,"","0.06~0.12 常見","step=0.01")}
+    ${field("arv","垂尾展弦比（單片）","","1~2","step=0.1")}
+    ${field("tv","垂尾漸縮比","","","step=0.05")}
+    </div>`+
+    (T==="tee"?`<div class="hint">⊤ 平尾會自動放在垂尾頂端（高度＝垂尾高）。</div>`:"")+
+    ((T==="hh"||T==="box")?`<div class="hint">Ⓗ 兩片垂尾自動放在平尾兩端（±半平尾展），各分一半面積。</div>`:"")+
+    (T==="box"?`<div class="hint">◻ 上封板＝垂尾頂端一片矩形板（弦＝垂尾梢弦），只算結構。</div>`:"");
+  }
   return `<div class="card"><h2><span class="no">STEP 6</span>尾翼</h2>
-  <div class="lead">尾翼是飛機的「羽毛」。目標：<b>Vh 0.30~0.60、Vv 0.02~0.05</b> 綠燈。</div>
-  <div class="grid2">
-  ${field("shr","平尾面積比 Sh/S","","0.15~0.25 常見","step=0.01")}
-  ${field("arh","平尾展弦比","","2~5","step=0.5")}
-  ${field("th","平尾漸縮比","","","step=0.05")}
-  ${field("svr","垂尾面積比 Sv/S","","0.06~0.12 常見","step=0.01")}
-  ${field("arv","垂尾展弦比","","1~2","step=0.1")}
-  ${field("tv","垂尾漸縮比","","","step=0.05")}
-  </div>
-  <div class="field"><label>尾翼構型</label>
-    <select id="f_vtype" onchange="state.vtype=this.value;refreshLive()">
-      <option value="conventional" ${state.vtype!=="V"?"selected":""}>傳統十字尾（垂尾也自動生成）</option>
-      <option value="V" ${state.vtype==="V"?"selected":""}>V 型尾（Fusion 全自動生成）</option>
-    </select>
-    <div class="hint">V 尾夾角與面積由公式自動換算（NACA R-823 法＋7.5% 補償）。</div></div>
-  <div data-live='["Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威"]'></div></div>`;
+  <div class="lead">先選構型，再填該構型需要的參數。目標：<b>Vh 0.30~0.60、Vv 0.02~0.05</b> 綠燈。</div>
+  ${cards}${fields}
+  <div data-live='["尾力臂","Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威"]'></div></div>`;
 }
 function rPower(){
   return `<div class="card"><h2><span class="no">STEP 7</span>動力（選填）</h2>
@@ -614,7 +724,7 @@ function rFinal(){
       <li><b>實體 &gt; 建立 &gt; 從表格生成</b> → 選你的 xlsx → 看預覽 → 確定。</li>
       <li>主翼＋水平尾就長出來了，每支都能用 <b>修改 &gt; Edit Wing</b> 再調（先點選特徵）。</li>
       <li id="datHint"></li>
-      <li>垂直尾翼也會自動生成（十字尾＝直立翼、V 尾＝斜翼），整台機一次到位。</li>
+      <li>五種尾翼構型（十字／T／V／H／口字）全部自動生成，整台機一次到位。</li>
     </ol>
   </div></div>`;
 }
@@ -655,6 +765,7 @@ function render(){
 function go(i){state.step=i;render()}
 $("#btnPrev").onclick=()=>{if(state.step>0)go(state.step-1)};
 $("#btnNext").onclick=()=>{if(state.step<STEPS.length-1)go(state.step+1)};
+ensureVeeDefaults();
 render();
 </script>
 </body>
