@@ -645,12 +645,18 @@ function rFoil(){
     <b>✅「${state._shareFoil.name}」已加入本次清單，這次設計可以直接用。</b><br>
     <span style="font-size:.9rem">要讓<b>全社團永久共用</b>（強烈建議、免會 git）：</span>
     <ol style="padding-left:1.3rem;font-size:.88rem;margin:.3rem 0">
-      <li>按下面的按鈕開啟 GitHub Issue（內容已幫你填好，只要有 GitHub 帳號即可）。</li>
-      <li>照 Issue 裡的指示：用記事本打開 .dat、全選複製、貼進指定區塊。</li>
+      <li>按下面的按鈕開啟 GitHub Issue（只要有 GitHub 帳號即可）。</li>
+      ${state._shareFoil.embedded
+        ? "<li><b>座標內容已自動帶入</b>，看一眼直接按 Submit 送出即可。</li>"
+        : (state._shareFoil.datText
+          ? "<li>檔案較大無法預填：按「複製座標內容」→ 在 Issue 的 ```dat 區塊貼上（取代提示文字）。</li>"
+          : "<li>照 Issue 指示：用記事本打開 .dat、全選複製、貼進指定區塊。</li>")}
       <li>送出 → 機器人自動驗證並 commit，通過會自動回覆＋關閉 Issue，全社團即刻可用。</li>
     </ol>
     <a class="btn primary" style="display:inline-block;text-decoration:none;font-size:.95rem;padding:.4rem 1rem"
       href="${state._shareFoil.issueUrl}" target="_blank">🚀 一鍵上傳到社團翼型庫</a>
+    ${state._shareFoil.datText?`<button class="btn" style="font-size:.85rem;padding:.25rem .8rem;margin-left:.4rem"
+      onclick="navigator.clipboard&&navigator.clipboard.writeText(state._shareFoil.datText);this.textContent='已複製 ✓'">複製座標內容</button>`:""}
     <button class="btn" style="font-size:.85rem;padding:.25rem .8rem;margin-left:.4rem"
       onclick="state._shareFoil=null;render()">關閉</button>
     <div class="hint" style="margin-top:.35rem">幹部也可直接<a href="${FOILS_JSON_EDIT_URL}" target="_blank">手動編輯 foils.json</a>。</div>
@@ -662,6 +668,9 @@ function rFoil(){
     ② 下面填「一樣的檔名」＋從極線圖讀出的兩個係數（讀法見上面教學）。NACA 四位數（如 NACA 3412）免檔案，檔名留空即可。</div>
     <div class="grid2">
       <div class="field"><label>翼型名稱</label><input type="text" id="nf_name" placeholder="例：S3021"></div>
+      <div class="field"><label>選擇 .dat 檔</label>
+        <input type="file" id="nf_file" accept=".dat,.txt" onchange="readFoilFile(this)">
+        <div class="hint">選了檔就自動帶檔名與座標內容，上傳時免手貼；NACA 四位數不用選檔</div></div>
       <div class="field"><label>dat 檔名（放在 airfoils/ 內）</label><input type="text" id="nf_dat" placeholder="例：s3021.dat；NACA 四位數留空"></div>
       <div class="field"><label>CLmax</label><input type="number" id="nf_clmax" value="1.2" step="0.05"></div>
       <div class="field"><label>巡航 CL</label><input type="number" id="nf_clc" value="0.7" step="0.05"></div>
@@ -701,21 +710,51 @@ function addFoil(){
     clmax:clmax||1.2, clCruise:clc||0.7,
     note:"自訂翼型"+(dat?`（需把 ${dat} 放進 airfoils/）`:"（NACA 內建公式）")};
   state.customFoils.push(nf);
-  // 組「一鍵開 Issue 上傳」連結（機器人 workflow 會自動 commit）
+  // 組「一鍵開 Issue 上傳」連結（機器人 workflow 會自動 commit）。
+  // 表單有選 .dat 檔時直接把座標內容預填進 Issue（URL 太長才退回手貼）。
   const meta={name:nf.name, dat:nf.dat, clmax:nf.clmax, clCruise:nf.clCruise};
-  const body =
+  const datText=(state._nfDatText||"").trim();
+  const mkBody=(datPart)=>
     "送出這個 Issue 就完成上傳——機器人會自動驗證並 commit 進社團翼型庫，"+
     "不用會 git、不用任何權限。\n\n## metadata（勿改格式）\n```json\n"+
-    JSON.stringify(meta,null,1)+"\n```\n\n## dat 座標內容\n"+
-    (nf.dat?("👉 用記事本打開你的 `"+nf.dat+"`，**全選複製**，貼到下面兩個 ``` 之間"+
-     "（取代提示文字）：\n```dat\n（把 .dat 內容貼在這裡）\n```"):
-     "（NACA 四位數免附檔，直接送出即可）");
-  state._shareFoil={name:nf.name,
-    issueUrl:"https://github.com/NYCU-UAV/UAV_designsystem_web/issues/new"+
+    JSON.stringify(meta,null,1)+"\n```\n\n## dat 座標內容\n"+datPart;
+  const mkUrl=(body)=>"https://github.com/NYCU-UAV/UAV_designsystem_web/issues/new"+
       "?title="+encodeURIComponent("[翼型] "+nf.name)+
-      "&body="+encodeURIComponent(body)};
+      "&body="+encodeURIComponent(body);
+  let embedded=false, issueUrl;
+  if(!nf.dat){
+    issueUrl=mkUrl(mkBody("（NACA 四位數免附檔，直接送出即可）")); embedded=true;
+  }else if(datText){
+    issueUrl=mkUrl(mkBody("```dat\n"+datText+"\n```"));
+    embedded = issueUrl.length<=7000;     // GitHub/伺服器 URL 上限保險值
+    if(!embedded) issueUrl=mkUrl(mkBody(
+      "👉 按分享框的「複製座標內容」，貼到下面兩個 ``` 之間（取代提示文字）：\n"+
+      "```dat\n（把 .dat 內容貼在這裡）\n```"));
+  }else{
+    issueUrl=mkUrl(mkBody(
+      "👉 用記事本打開你的 `"+nf.dat+"`，**全選複製**，貼到下面兩個 ``` 之間"+
+      "（取代提示文字）：\n```dat\n（把 .dat 內容貼在這裡）\n```"));
+  }
+  state._shareFoil={name:nf.name, issueUrl, embedded,
+    datText:(!embedded&&datText)?datText:null};
+  state._nfDatText=null;
   state.foil=name; state.clmax=clmax||1.2; state.clcruise=clc||0.7;
   render();
+}
+function readFoilFile(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ state._nfDatText=r.result;
+    const guess=f.name.toLowerCase().endsWith(".dat")?f.name.toLowerCase():f.name.toLowerCase()+".dat";
+    if(!$("#nf_dat").value) $("#nf_dat").value=guess.replace(/[^\w.-]/g,"");
+    // 檔頭常是翼型名稱，順手帶入名稱欄
+    if(!$("#nf_name").value){
+      const first=(r.result.split("\n")[0]||"").trim();
+      if(first && !/^[-\d.\s]+$/.test(first)) $("#nf_name").value=first.slice(0,30);
+    }
+  };
+  r.readAsText(f);
 }
 function delFoil(name){
   state.customFoils=state.customFoils.filter(f=>f.name!==name);
