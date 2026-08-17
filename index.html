@@ -601,10 +601,24 @@ function ensureVeeDefaults(){
 state.customFoils=[];   // 本次工作階段的臨時翼型；永久共用走 GitHub foils.json
 const FOILS_JSON_EDIT_URL =
   "https://github.com/NYCU-UAV/UAV_designsystem_web/edit/main/foils.json";
-// 啟動時抓 repo 的共用翼型庫（GitHub Pages 同源；file:// 抓不到就用內建後備）
-fetch("foils.json").then(r=>r.ok?r.json():null).then(list=>{
-  if(list){ setFoilLibrary(list); render(); }
-}).catch(()=>{});
+// 啟動時抓共用翼型庫。raw.githubusercontent 擺第一：機器人 commit 後
+// 「立刻」讀得到、且有 Access-Control-Allow-Origin:*；GitHub Pages 的
+// 內容則會停在舊版——用 GITHUB_TOKEN 推的 commit 不會觸發 Pages 重建
+// （實測機器人上傳的翼型在 Pages 上永遠看不到）。最後才退回內建清單。
+const FOILS_SOURCES=[
+  "https://raw.githubusercontent.com/NYCU-UAV/UAV_designsystem_web/main/foils.json",
+  "foils.json",
+];
+(async()=>{
+  for(const src of FOILS_SOURCES){
+    try{
+      const r=await fetch(src,{cache:"no-store"});
+      if(!r.ok) continue;
+      const list=await r.json();
+      if(Array.isArray(list)&&list.length){ setFoilLibrary(list); render(); return; }
+    }catch(e){ /* 換下一個來源 */ }
+  }
+})();
 
 function inputs(){
   const pool=allFoils(state.customFoils);

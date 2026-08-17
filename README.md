@@ -61,3 +61,9 @@ YYYYMMDD_姓名_機名.xlsx   （例：20260817_小明_2米練習機.xlsx）
   （非公式），Fusion 端只讀值所以完全相容。
 - `index.html` 內建的 FOILS 陣列只是 foils.json 抓不到時的離線後備，兩邊不必嚴格同步，
   以 foils.json 為準。
+- **⚠ Pages 內容對機器人的 commit 是「不會更新」的**：GitHub 規定用 `GITHUB_TOKEN` 推的
+  commit 不觸發任何 workflow，包含 Pages 的 `pages-build-deployment`。所以
+  `foils.json` 與 `airfoils/*.dat` 一律以 **raw.githubusercontent** 為第一來源
+  （有 `Access-Control-Allow-Origin: *`、commit 後立即可讀），Pages 只當後備——
+  精靈（`FOILS_SOURCES`）與 Fusion 匯入器（`SHARED_AIRFOIL_URLS`）兩邊都已這樣設定。
+  改動這兩處前先想清楚這個限制。
