@@ -44,13 +44,6 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .steps button.cur{background:var(--accent);color:#fff;border-color:var(--accent2);
   box-shadow:.15rem .15rem 0 rgba(51,48,42,.25);transform:translateY(-1px)}
 .steps button.done{color:var(--ok);border-color:var(--ok)}
-.steplegend{display:flex;gap:1rem;justify-content:flex-end;align-items:center;
-  font-size:.78rem;color:var(--ink2);margin:-.55rem .1rem .9rem}
-.steplegend .sw{display:inline-flex;align-items:center;justify-content:center;
-  width:.95rem;height:.95rem;border-radius:.25rem;border:1.5px solid var(--ink2);
-  background:var(--card);margin-right:.3rem;font-size:.68rem;vertical-align:-2px}
-.steplegend .sw.cur{background:var(--accent);border-color:var(--accent2)}
-.steplegend .sw.done{color:var(--ok);border-color:var(--ok);font-weight:700}
 /* 卡片 */
 .card{
   background:var(--card);border:2px solid var(--ink);border-radius:.6rem;
@@ -196,11 +189,6 @@ code{font-family:Consolas,monospace;background:#efe6cd;border-radius:.25rem;padd
 <div class="projbar" id="projBar"></div>
 <div id="projPanel" class="hidden"></div>
 <div class="steps" id="stepbar"></div>
-<div class="steplegend">
-  <span><span class="sw cur"></span>現在這步</span>
-  <span><span class="sw done">✓</span>已完成</span>
-  <span><span class="sw todo"></span>還沒填</span>
-</div>
 <div id="stepHost"></div>
 
 <div class="nav">
