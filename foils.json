@@ -12,7 +12,8 @@
   "clCruise": 0.8,
   "aoaCruise": 4,
   "note": "平底經典練習翼型，好做好飛，repo 已附檔",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=clarky-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=clarky-il",
+  "cat": "train"
  },
  {
   "name": "SD7037",
@@ -27,7 +28,8 @@
   "clCruise": 0.7,
   "aoaCruise": 4,
   "note": "低雷諾數滑翔名翼型（Selig 設計），repo 已附檔",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=sd7037-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=sd7037-il",
+  "cat": "glide"
  },
  {
   "name": "AG35",
@@ -41,7 +43,8 @@
   "clCruise": 0.65,
   "aoaCruise": 3,
   "note": "Drela 設計的滑翔翼型，薄而低阻，repo 已附檔",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=ag35-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=ag35-il",
+  "cat": "glide"
  },
  {
   "name": "NACA 2412",
@@ -56,7 +59,8 @@
   "clCruise": 0.7,
   "aoaCruise": 4,
   "note": "半對稱萬用翼型；NACA 四位數免下載（程式內建公式）",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=naca2412-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=naca2412-il",
+  "cat": "train"
  },
  {
   "name": "NACA 0012",
@@ -70,7 +74,8 @@
   "clCruise": 0.5,
   "aoaCruise": 4,
   "note": "對稱翼型，正倒飛一樣；特技取向。免下載",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=naca0012-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=naca0012-il",
+  "cat": "sym"
  },
  {
   "name": "S1223",
@@ -84,7 +89,8 @@
   "clCruise": 1.2,
   "aoaCruise": 5,
   "note": "超高升力（載重挑戰用）；阻力大、需下載 .dat",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=s1223-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=s1223-il",
+  "cat": "lift"
  },
  {
   "name": "S1020",
@@ -96,7 +102,8 @@
   "aoaStall": null,
   "aoaCruise": null,
   "note": "Selig 撲翼機翼型（低雷諾數）；係數為初估，請依極線校正",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=s1020-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=s1020-il",
+  "cat": "misc"
  },
  {
   "name": "ONERA OA206 AIRFOIL",
@@ -108,7 +115,8 @@
   "aoaStall": null,
   "aoaCruise": null,
   "note": "由 Issue 自動提交",
-  "url": ""
+  "url": "",
+  "cat": "misc"
  },
  {
   "name": "S2050 8.93%",
@@ -120,6 +128,7 @@
   "aoaStall": null,
   "aoaCruise": null,
   "note": "由 Issue 自動提交",
-  "url": "http://airfoiltools.com/airfoil/details?airfoil=s2050-il"
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=s2050-il",
+  "cat": "glide"
  }
 ]

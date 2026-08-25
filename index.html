@@ -44,6 +44,26 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .steps button.cur{background:var(--accent);color:#fff;border-color:var(--accent2);
   box-shadow:.15rem .15rem 0 rgba(51,48,42,.25);transform:translateY(-1px)}
 .steps button.done{color:var(--ok);border-color:var(--ok)}
+.fchips{display:flex;flex-wrap:wrap;gap:.35rem;margin:0 0 .8rem}
+.fchip{border:1.5px solid var(--line);border-radius:2rem;background:var(--card);
+  padding:.22rem .8rem;font:inherit;font-size:.85rem;color:var(--ink2);cursor:pointer}
+.fchip small{opacity:.65}
+.fchip.on{background:var(--accent);color:#fff;border-color:var(--accent2);font-weight:700}
+.fgroup{font-weight:700;color:var(--ink2);font-size:.88rem;margin:.7rem 0 .35rem;
+  border-bottom:1.5px dashed var(--line);padding-bottom:.15rem}
+.lz{width:100%;max-height:340px;display:block;background:#f7f2e4;border:1.5px solid var(--line);
+  border-radius:.5rem;margin:.2rem 0 .6rem}
+.lz-fus{fill:#d8cba8;stroke:var(--ink2);stroke-width:2}
+.lz-wing{fill:#e8b98a;stroke:var(--accent2);stroke-width:2;fill-opacity:.85}
+.lz-tail{fill:#cfd9e4;stroke:#5b7891;stroke-width:2;fill-opacity:.9}
+.lz-fin{fill:#8fa3b5;stroke:#4a6478;stroke-width:1.5}
+.lz-dim{stroke:var(--ink2);stroke-width:1.5;stroke-dasharray:6 4}
+.lz-lb{font-size:15px;fill:var(--ink2);text-anchor:middle;font-family:inherit}
+.lz-cg circle{fill:#fff;stroke:#b3382e;stroke-width:2.5}
+.lz-cg path{fill:#b3382e}
+.lz-cg text{fill:#b3382e;font-weight:700;font-size:15px;text-anchor:middle}
+.lz-np{fill:#3a6ea5}
+.lz-npt{fill:#3a6ea5;font-weight:700}
 /* 卡片 */
 .card{
   background:var(--card);border:2px solid var(--ink);border-radius:.6rem;
@@ -979,6 +999,8 @@ function refreshLive(){
       initFlowPanel();
     }
   }
+  const lz=$("#layoutViz");
+  if(lz){ const li=inputs(); lz.innerHTML=layoutSvg(li,compute(li)); }
   const ph=$("#posHint");
   if(ph){
     const o=compute(inputs());
@@ -1051,26 +1073,59 @@ function rWing(){
   <div data-live='["輸入檢查","展弦比","WCL 立方翼載","巡航雷諾數","巡航需求 CL"]'></div>
   ${fixTable()}</div>`;
 }
+/* 翼型分類：cat 欄位優先（新上傳可指定），沒有就從 cls/名稱推 */
+const FOILCATS = [["rec","★ 推薦"],["train","練習／通用"],["glide","滑翔（低雷諾）"],
+                  ["sym","對稱／特技"],["lift","高升力"],["misc","其他／新進"]];
+function foilCat(f){
+  if(f.cat) return f.cat;
+  const cls = f.cls||[];
+  if(cls.includes("lift")) return "lift";
+  if(/naca\s*00\d\d/i.test(f.name)) return "sym";
+  if(cls.includes("glider")) return "glide";
+  if(cls.includes("trainer")||cls.includes("park")||cls.includes("sport")) return "train";
+  return "misc";
+}
+
 function rFoil(){
   const i=inputs(),o=compute(i);
   const reTxt=Math.round(o.re).toLocaleString();
   const clsOf=p=>({trainer:"trainer",park:"park",sport:"sport",glider:"glider"}[p]);
-  const sorted=[...allFoils(state.customFoils)].sort((a,b)=>
-    ((b.cls||[]).includes(clsOf(state.preset))?1:0)-((a.cls||[]).includes(clsOf(state.preset))?1:0));
-  return `<div class="card"><h2><span class="no">STEP 4</span>選翼型</h2>
-  ${goal("翼型＝升力與失速特性","<b>需求 CL ≤ 翼型巡航 CL</b>")}
-  <div class="lead">查翼型數據要看接近 <b style="font-family:Consolas,monospace">Re ${reTxt}</b> 的曲線才作數；★＝這個構型的推薦。</div>
-  <div class="foilcards">${sorted.map(f=>{
-    const rec=(f.cls||[]).includes(clsOf(state.preset));
+  const all=[...allFoils(state.customFoils)];
+  const isRec=f=>(f.cls||[]).includes(clsOf(state.preset));
+  const fc=state._fcat||"all";
+  const card=f=>{
     const del=f.custom?`<span style="float:right;cursor:pointer" title="刪除自訂翼型"
       onclick="event.stopPropagation();delFoil('${f.name}')">🗑</span>`:"";
     return `<div class="foil ${state.foil===f.name?"sel":""}" onclick="pickFoil('${f.name}')">
-      <h4>${rec?"★ ":""}${f.name}${del}</h4><p>${f.note||"自訂翼型"}</p>
+      <h4>${isRec(f)?"★ ":""}${f.name}${del}</h4><p>${f.note||"自訂翼型"}</p>
       <span class="tag ${f.have?"":"dl"}">${f.dat===""?"內建公式，免檔案":f.have?"repo 已附 dat":"需自備 dat"}</span>
-    </div>`;}).join("")}
-    <div class="foil" onclick="$('#newFoilForm').classList.toggle('hidden')" style="border-style:dashed">
-      <h4>➕ 新增翼型</h4><p>清單沒有你要的？自己加一個（本次立即可用；要全社團共用再一鍵上 GitHub）</p></div>
-  </div>
+    </div>`;};
+  const addCard=`<div class="foil" onclick="$('#newFoilForm').classList.toggle('hidden')" style="border-style:dashed">
+      <h4>➕ 新增翼型</h4><p>本次立即可用；要全社團共用再一鍵上 GitHub</p></div>`;
+  const chips=[["all","全部"],...FOILCATS].map(([k,label])=>{
+    const n = k==="all"?all.length : k==="rec"?all.filter(isRec).length
+            : all.filter(f=>foilCat(f)===k).length;
+    return n===0&&k!=="all"?"":`<button class="fchip ${fc===k?"on":""}"
+      onclick="state._fcat='${k}';render()">${label} <small>${n}</small></button>`;
+  }).join("");
+  let body;
+  if(fc==="all"){
+    // 分組總覽：每類一個小標題（推薦排每組最前）
+    body = FOILCATS.filter(([k])=>k!=="rec").map(([k,label])=>{
+      const fs=all.filter(f=>foilCat(f)===k).sort((a,b)=>(isRec(b)?1:0)-(isRec(a)?1:0));
+      return fs.length?`<div class="fgroup">${label}</div>
+        <div class="foilcards">${fs.map(card).join("")}</div>`:"";
+    }).join("")+`<div class="foilcards">${addCard}</div>`;
+  }else{
+    const fs=(fc==="rec"?all.filter(isRec):all.filter(f=>foilCat(f)===fc))
+      .sort((a,b)=>(isRec(b)?1:0)-(isRec(a)?1:0));
+    body = `<div class="foilcards">${fs.map(card).join("")}${addCard}</div>`;
+  }
+  return `<div class="card"><h2><span class="no">STEP 4</span>選翼型</h2>
+  ${goal("翼型＝升力與失速特性","<b>需求 CL ≤ 翼型巡航 CL</b>")}
+  <div class="lead">查翼型數據要看接近 <b style="font-family:Consolas,monospace">Re ${reTxt}</b> 的曲線才作數；★＝這個構型的推薦。</div>
+  <div class="fchips">${chips}</div>
+  ${body}
   ${state._shareFoil?`<div style="border:2px solid var(--ok);border-radius:.5rem;padding:.7rem .8rem;margin:.5rem 0;background:#eef5ee">
     <b>✅「${state._shareFoil.name}」已加入本次清單，這次設計可以直接用。</b><br>
     <span style="font-size:.9rem">要讓<b>全社團永久共用</b>（強烈建議、免會 git）：</span>
@@ -1110,6 +1165,13 @@ function rFoil(){
       <div class="field"><label>dat 檔名（自動填）</label><input type="text" id="nf_dat" placeholder="例：s3021.dat；NACA 四位數留空"></div>
       <div class="field"><label>CLmax</label><input type="number" id="nf_clmax" value="1.2" step="0.05"></div>
       <div class="field"><label>巡航 CL</label><input type="number" id="nf_clc" value="0.7" step="0.05"></div>
+      <div class="field"><label>分類</label><select id="nf_cat">
+        <option value="misc">其他／新進</option>
+        <option value="train">練習／通用</option>
+        <option value="glide">滑翔（低雷諾）</option>
+        <option value="sym">對稱／特技</option>
+        <option value="lift">高升力</option>
+      </select></div>
     </div>
     <button class="btn" onclick="addFoil()">加入並選用</button>
   </div>
@@ -1145,13 +1207,14 @@ function addFoil(){
     alert("請三選一：貼 airfoiltools 網址、選 .dat 檔、或用 NACA 四位數命名");return}
   if(isNaca) dat="";
   const nf={name, dat, have:false, custom:true, cls:[], url:srcUrl,
+    cat:($("#nf_cat")&&$("#nf_cat").value)||"misc",
     clmax:clmax||1.2, clCruise:clc||0.7,
     note:"自訂翼型"+(isNaca?"（NACA 內建公式）":
       srcUrl?"（機器人/Fusion 會自動下載）":`（需把 ${dat} 放進 airfoils/）`)};
   state.customFoils.push(nf);
   // 組「一鍵開 Issue 上傳」連結（機器人 workflow 會自動 commit）。
   // 表單有選 .dat 檔時直接把座標內容預填進 Issue（URL 太長才退回手貼）。
-  const meta={name:nf.name, dat:nf.dat, clmax:nf.clmax, clCruise:nf.clCruise};
+  const meta={name:nf.name, dat:nf.dat, clmax:nf.clmax, clCruise:nf.clCruise, cat:nf.cat};
   if(nf.url) meta.url=nf.url;
   const datText=(state._nfDatText||"").trim();
   const mkBody=(datPart)=>
@@ -1222,6 +1285,49 @@ function delFoil(name){
     state.foil=f0.name; state.clmax=f0.clmax; state.clcruise=f0.clCruise; }
   render();
 }
+/* STEP 5 佈局俯視圖：mm 座標直接畫進 viewBox（SVG 保持等比例），
+   跟著欄位即時重畫。x 往右＝機尾方向、y＝翼展方向。 */
+function layoutSvg(i,o){
+  const T=i.tailType||"cross";
+  const xN=-o.noseLE, xT=xN+o.totalLen;              // 機頭 / 機尾 x（mm）
+  const half=i.span/2;
+  const swp=0.25*(i.chord-o.ct);                     // 1/4 弦打直的翼尖前緣位移
+  const wing=`M0,0 L${swp},${-half} L${swp+o.ct},${-half} L${i.chord},0
+              L${swp+o.ct},${half} L${swp},${half} Z`;
+  let tail="";
+  if(T==="vee"){
+    const y=o.veeSpanY, sw=0.25*(i.veeCr-o.veeCt), x=o.htailLeX;
+    tail=`<path class="lz-tail" d="M${x},0 L${x+sw},${-y} L${x+sw+o.veeCt},${-y} L${x+i.veeCr},0
+      L${x+sw+o.veeCt},${y} L${x+sw},${y} Z"/>
+      <text class="lz-lb" x="${x+i.veeCr/2}" y="${-y-10}">V 尾</text>`;
+  }else{
+    const y=o.bh*1000/2, sw=0.25*(o.chRoot-o.chTip), x=o.htailLeX;
+    tail=`<path class="lz-tail" d="M${x},0 L${x+sw},${-y} L${x+sw+o.chTip},${-y} L${x+o.chRoot},0
+      L${x+sw+o.chTip},${y} L${x+sw},${y} Z"/>`;
+    const fy=o.finY||0, fx=o.finLeX, fw=o.cvRoot;
+    const strip=yy=>`<rect class="lz-fin" x="${fx}" y="${yy-5}" width="${fw}" height="10" rx="4"/>`;
+    tail+= fy>0 ? strip(-fy)+strip(fy) : strip(0);
+  }
+  const xcg=i.xcg*o.mac;
+  const xnp=(state.xnpX>0?state.xnpX:o.xnpEst)*o.mac;
+  const y0=-half-46, y1=half+44, x0=xN-30, x1=xT+30;
+  return `<svg class="lz" viewBox="${x0} ${y0} ${x1-x0} ${y1-y0}" preserveAspectRatio="xMidYMid meet">
+    <rect class="lz-fus" x="${xN}" y="-9" width="${o.totalLen}" height="18" rx="9"/>
+    <path class="lz-wing" d="${wing}"/>
+    ${tail}
+    <line class="lz-dim" x1="${xN}" y1="${half+28}" x2="${xT}" y2="${half+28}"/>
+    <text class="lz-lb" x="${(xN+xT)/2}" y="${half+22}">全長 ≈ ${o.totalLen.toFixed(0)} mm　·　1 格＝真實比例</text>
+    <g class="lz-cg" transform="translate(${xcg},0)">
+      <circle r="9"/><path d="M0,-9 A9,9 0 0 1 9,0 L0,0 Z"/><path d="M0,9 A9,9 0 0 1 -9,0 L0,0 Z"/>
+      <text y="-16" x="0">CG ${xcg.toFixed(0)}</text>
+    </g>
+    <g transform="translate(${xnp},0)">
+      <path class="lz-np" d="M0,-8 L7,6 L-7,6 Z"/>
+      <text class="lz-lb lz-npt" x="0" y="22">NP ${xnp.toFixed(0)}</text>
+    </g>
+  </svg>`;
+}
+
 function rLayout(){
   return `<div class="card"><h2><span class="no">STEP 5</span>機身佈局與重心</h2>
   ${goal("重心位置＝穩不穩","<b>SM 0.05~0.15</b>")}
@@ -1232,6 +1338,7 @@ function rLayout(){
   ${field("xcg","重心位置（MAC 比例）","","0.30~0.35 起手；調到 SM 綠燈為止。做出來後用手指頂翼下實測！","step=0.005")}
   </div>
   <div data-live='["靜穩定裕度 SM"]'></div>
+  <div id="layoutViz"></div>
   <div class="hint" id="posHint"></div>
   <div class="grid2">
   ${field("htailX","平尾/V尾前緣位置（0＝自動）","mm","自動＝由上面的尾距換算；填非 0 值可手動指定")}

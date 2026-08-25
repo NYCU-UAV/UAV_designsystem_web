@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
       }
       const rows = await sql`
         SELECT name, dat_name AS dat, clmax, cl_cruise AS "clCruise",
-               cls, uploader, created_at
+               cls, cat, uploader, created_at
         FROM foils ORDER BY name`;
       sendJson(res, 200, { ok: true,
         foils: rows.map(r => ({ ...r, cls: r.cls ? r.cls.split(",") : [] })) });
@@ -42,14 +42,14 @@ module.exports = async (req, res) => {
       const nPts = (b.dat_text.match(/^\s*-?[\d.]+\s+-?[\d.]+\s*$/gm) || []).length;
       if (nPts < 20) { sendJson(res, 400, { ok: false, error: "不像翼型座標檔（座標列 <20）" }); return; }
       await sql`
-        INSERT INTO foils (name, dat_name, dat_text, clmax, cl_cruise, cls, uploader)
+        INSERT INTO foils (name, dat_name, dat_text, clmax, cl_cruise, cls, cat, uploader)
         VALUES (${b.name}, ${b.dat_name}, ${b.dat_text},
                 ${b.clmax || null}, ${b.cl_cruise || null},
-                ${(b.cls || []).join(",")}, ${b.uploader || ""})
+                ${(b.cls || []).join(",")}, ${b.cat || ""}, ${b.uploader || ""})
         ON CONFLICT (name) DO UPDATE SET
           dat_name = EXCLUDED.dat_name, dat_text = EXCLUDED.dat_text,
           clmax = EXCLUDED.clmax, cl_cruise = EXCLUDED.cl_cruise,
-          cls = EXCLUDED.cls, uploader = EXCLUDED.uploader`;
+          cls = EXCLUDED.cls, cat = EXCLUDED.cat, uploader = EXCLUDED.uploader`;
       sendJson(res, 200, { ok: true });
       return;
     }

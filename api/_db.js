@@ -41,9 +41,11 @@ async function ensureSchema(sql) {
     clmax real,
     cl_cruise real,
     cls text NOT NULL DEFAULT '',
+    cat text NOT NULL DEFAULT '',
     uploader text NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT now()
   )`;
+  await sql`ALTER TABLE foils ADD COLUMN IF NOT EXISTS cat text NOT NULL DEFAULT ''`;
   _ready = true;
 }
 
