@@ -596,6 +596,93 @@ function buildXflr5Xml(i,o,name){
 `;
 }
 
+/* ---------- flow5 飛機 XML（Plane > import plane from xml） ----------
+   flow5 是 xflr5 的第 7 版（同作者），2026 起 GPL-3.0 開源免費。
+   格式對照官方樣本 API_examples/PlaneRun4/xml/plane.xml 逐標籤確認：
+   - 根元素 <xflplane version="1.0">、DOCTYPE flow5（xflr5 是 explane）
+   - Units 多了 area / speed / inertia 三個換算係數
+   - wing 層：symmetric（xflr5 是少一個 m 的 Symetric）、多了 Two_Sided /
+     Tip_Strips / Rx_angle / Ry_angle（Ry_angle 取代 xflr5 的 Tilt_angle）
+   - 垂尾不再用 isFin 隱式旋轉，改為 Type=FIN + Rx_angle=-90 + Two_Sided=false
+   - <Section> 的所有標籤與 xflr5 完全相同，故剖面產生邏輯直接沿用
+   全案優點：flow5 的腳本模式支援整機分析（xflr5 只支援翼型），
+   所以之後可以由 Fusion 外掛直接驅動、免手動點四個步驟。            */
+function buildFlow5Xml(i,o,name){
+  const T=i.tailType||"cross";
+  const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
+  const sec=(y,chord,xoff,dihe,twist,foil)=>`
+     <Section>
+      <y_position>${M(y)}</y_position>
+      <Chord>${M(chord)}</Chord>
+      <xOffset>${M(xoff)}</xOffset>
+      <Dihedral>${dihe.toFixed(3)}</Dihedral>
+      <Twist>${twist.toFixed(3)}</Twist>
+      <x_number_of_panels>13</x_number_of_panels>
+      <x_panel_distribution>COSINE</x_panel_distribution>
+      <y_number_of_panels>19</y_number_of_panels>
+      <y_panel_distribution>UNIFORM</y_panel_distribution>
+      <Left_Side_FoilName>${E(foil)}</Left_Side_FoilName>
+      <Right_Side_FoilName>${E(foil)}</Right_Side_FoilName>
+     </Section>`;
+  // isFin 在 flow5 改用 Rx_angle=-90 立起來；Two_Sided=false 代表單面
+  const wing=(wname,type,pos,isFin,sections)=>`
+    <wing>
+     <Name>${E(wname)}</Name>
+     <Type>${type}</Type>
+     <Description></Description>
+     <Position>${pos.map(v=>(v/1000).toFixed(6)).join(", ")}</Position>
+     <Tip_Strips>1</Tip_Strips>
+     <Rx_angle>${isFin?"-90.000":"0.000"}</Rx_angle>
+     <Ry_angle>0.000</Ry_angle>
+     <symmetric>true</symmetric>
+     <Two_Sided>${isFin?"false":"true"}</Two_Sided>
+     <Inertia><Mass>0.000</Mass></Inertia>
+     <Sections>${sections}</Sections>
+    </wing>`;
+  const foil=i.foilData.name;
+  const mainSecs =
+    sec(0, i.chord, 0, i.dihedral, i.incidence, foil)+
+    sec(i.span/2, o.ct, 0.25*(i.chord-o.ct), 0, i.incidence-i.washout, foil);
+  let tailWings="";
+  if(T==="vee"){
+    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,0],false,
+      sec(0, i.veeCr, 0, i.veeAngle, 0, TAIL_FOIL.name)+
+      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, 0, TAIL_FOIL.name));
+  }else{
+    tailWings = wing("Elevator","ELEVATOR",[o.htailLeX,0,o.htailZ],false,
+      sec(0, o.chRoot, 0, 0, 0, TAIL_FOIL.name)+
+      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, 0, TAIL_FOIL.name));
+    // hh/box 以等效單垂尾近似：兩片各 Sv/2、同弦長，高度加倍即等面積
+    tailWings += wing("Fin","FIN",[o.finLeX,0,0],true,
+      sec(0, o.cvRoot, 0, 0, 0, TAIL_FOIL.name)+
+      sec(o.bv*1000*((T==="hh"||T==="box")?2:1), o.cvTip,
+          0.25*(o.cvRoot-o.cvTip), 0, 0, TAIL_FOIL.name));
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE flow5>
+<xflplane version="1.0">
+ <Units>
+  <length_unit_to_meter>1</length_unit_to_meter>
+  <area_unit_to_m2>1</area_unit_to_m2>
+  <mass_unit_to_kg>1</mass_unit_to_kg>
+  <speed_unit_to_ms>1</speed_unit_to_ms>
+  <inertia_unit_to_kgm2>1</inertia_unit_to_kgm2>
+ </Units>
+ <Plane>
+  <Name>${E(name)}</Name>
+  <Description>由 NYCU UAV 填表精靈產生</Description>
+  <Inertia>
+   <Point_Mass>
+    <Tag>全機質量</Tag>
+    <Mass>${(i.mtow/1000).toFixed(4)}</Mass>
+    <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
+   </Point_Mass>
+  </Inertia>${wing("Main Wing","MAINWING",[0,0,0],false,mainSecs)}${tailWings}
+ </Plane>
+</xflplane>
+`;
+}
+
 /* ---------- xflr5 分析定義 XML（Analysis > Import analysis from xml file） ----------
    格式依 xflr5 v6 官方原始碼（xmlwpolarwriter/reader.cpp、miarex.cpp、
    wpolardlg.cpp）查證，避開三個已知 reader bug：
@@ -656,7 +743,7 @@ function buildXflr5IniSnippet(){
 }
 
 /* node 測試掛鉤 */
-if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,buildXflr5AnalysisXml,buildXflr5IniSnippet,PRESETS,FOILS,allFoils};}
+if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,buildFlow5Xml,buildXflr5AnalysisXml,buildXflr5IniSnippet,PRESETS,FOILS,allFoils};}
 </script>
 
 <!-- ======================= UI 區 ======================= -->
