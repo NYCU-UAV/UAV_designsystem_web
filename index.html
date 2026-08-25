@@ -1028,7 +1028,7 @@ const STEPS=[
  {id:"layout", title:"機身佈局", render:rLayout},
  {id:"tail", title:"尾翼", render:rTail},
  {id:"power", title:"動力", render:rPower},
- {id:"xflr5", title:"xflr5 驗證", render:rXflr5},
+ {id:"xflr5", title:"氣動驗證", render:rXflr5},
  {id:"final", title:"總檢查產出", render:rFinal},
 ];
 
@@ -1622,8 +1622,6 @@ async function findServer(){
   return null;
 }
 
-function serverAvailable(){ return API_BASE !== null; }
-
 function renderRunHost(){
   let h = `<button class="btn primary" onclick="doAnalyze()">▶ 分析（瀏覽器即時計算，出四張圖）</button>`;
   if(API_INFO && API_INFO.flow5)
@@ -1632,7 +1630,6 @@ function renderRunHost(){
   return h;
 }
 
-async function reScan(){ await findServer(); refreshLive(); }
 
 function chartSvg(pts, xk, yk, opts){
   const o = opts || {};
