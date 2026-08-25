@@ -69,6 +69,21 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .goal .g1{font-weight:700;color:var(--ink)}
 .goal .g2{color:var(--ink2);margin-top:.2rem}
 .goal .g2 b{color:var(--ok)}
+/* 四張圖 */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.7rem;margin:.8rem 0}
+.chart{border:1.5px solid var(--line);border-radius:.5rem;background:#fffdf6;padding:.5rem}
+.chart h4{font-size:.9rem;margin-bottom:.15rem}
+.chart .cv{font-size:.78rem;color:var(--ink2);min-height:2.2em}
+.chart svg{width:100%;height:auto;display:block}
+.chart .ok{color:var(--ok);font-weight:700}
+.chart .bad{color:var(--bad);font-weight:700}
+.runbox{border:2px solid var(--blue);border-radius:.55rem;background:#eef2f6;
+  padding:.8rem 1rem;margin:.8rem 0}
+.runbox h3{color:var(--blue);font-size:1.02rem;margin-bottom:.3rem}
+.spin{display:inline-block;width:.9em;height:.9em;border:2px solid var(--blue);
+  border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;
+  vertical-align:-.1em;margin-right:.4rem}
+@keyframes sp{to{transform:rotate(360deg)}}
 /* 紅黃燈自救表 */
 details.fixit{border:1.5px dashed var(--bad);border-radius:.5rem;padding:.55rem .8rem;
   margin:.7rem 0;background:#fdf0ee}
@@ -871,6 +886,15 @@ function refreshLive(){
   document.querySelectorAll("[data-live]").forEach(el=>{
     el.innerHTML=liveBadges(JSON.parse(el.dataset.live));
   });
+  const rh=$("#runHost");
+  if(rh){
+    rh.innerHTML = serverAvailable()
+      ? `<button class="btn primary" onclick="doAnalyze()">▶ 分析（跑 flow5，出四張圖）</button>`
+      : `<div class="hint">⚠ 目前是直接開啟檔案，沒有分析伺服器。<br>
+         要用一鍵分析，請在專案資料夾執行
+         <code>python local/analysis_server.py</code>，它會自動開瀏覽器。<br>
+         社團若已架好共用主機，直接開那台的網址即可，什麼都不用裝。</div>`;
+  }
   const ph=$("#posHint");
   if(ph){
     const o=compute(inputs());
@@ -1218,7 +1242,13 @@ function rXflr5(){
     <span class="badge">重心 <b>距主翼前緣 ${xcgMM} mm</b>（${i.xcg}×MAC）</span>
     <span class="badge">目前 XNP 估算 <b>${o.xnpEst.toFixed(3)}c</b></span>
   </div>
-  <details class="teach" open><summary>📚 xflr5 六步流程（照抄就能跑）</summary>
+  <div class="runbox">
+    <h3>⚡ 一鍵分析（推薦）</h3>
+    <div style="font-size:.9rem">不用開任何軟體——按下去就在背景跑 flow5，四張圖直接畫在這頁。</div>
+    <div id="runHost" style="margin-top:.5rem"></div>
+    <div id="runResult" style="margin-top:.6rem"></div>
+  </div>
+  <details class="teach"><summary>🛠 沒有一鍵分析？手動用 xflr5 跑（舊流程，仍可用）</summary>
     <ol>
       <li><b>安裝</b>：<a href="https://www.xflr5.tech" target="_blank">xflr5.tech</a> 免費下載。</li>
       <li><b>翼型極線</b>（<b>這步不能跳</b>，實測跳過會整批失敗）：<code>Ctrl+1</code> Direct Foil Design
@@ -1328,6 +1358,114 @@ function dl(text,fname,mime){
   a.href=URL.createObjectURL(new Blob([text],{type:mime||"text/plain"}));
   a.download=fname; a.click(); URL.revokeObjectURL(a.href);
 }
+/* ---------- 一鍵分析：呼叫本機/社團的分析伺服器，畫出四張圖 ---------- */
+let LAST_RESULT = null;
+
+// 只有從分析伺服器開啟時才有 /api/analyze（直接開檔或 GitHub Pages 上沒有）
+function serverAvailable(){
+  return location.protocol === "http:" || location.protocol === "https:";
+}
+
+function chartSvg(pts, xk, yk, opts){
+  const o = opts || {};
+  const W = 260, H = 170, P = 34;
+  const xs = pts.map(p=>p[xk]), ys = pts.map(p=>p[yk]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const px = v => P + (v - x0) / ((x1 - x0) || 1) * (W - P - 8);
+  const py = v => H - P + 6 - (v - y0) / ((y1 - y0) || 1) * (H - P - 14);
+  const d = pts.map((p,i)=>(i?"L":"M")+px(p[xk]).toFixed(1)+" "+py(p[yk]).toFixed(1)).join(" ");
+  // 零線（若 0 落在範圍內）
+  const zx = (x0 < 0 && x1 > 0) ? `<line x1="${px(0)}" y1="${py(y0)}" x2="${px(0)}" y2="${py(y1)}" stroke="#c9bb9a" stroke-dasharray="3 3"/>` : "";
+  const zy = (y0 < 0 && y1 > 0) ? `<line x1="${px(x0)}" y1="${py(0)}" x2="${px(x1)}" y2="${py(0)}" stroke="#c9bb9a" stroke-dasharray="3 3"/>` : "";
+  const mark = (o.markX !== undefined && o.markX !== null && o.markX >= x0 && o.markX <= x1)
+    ? `<line x1="${px(o.markX)}" y1="${py(y0)}" x2="${px(o.markX)}" y2="${py(y1)}" stroke="#b65c2e" stroke-width="1.5"/>` : "";
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label||''}">
+    <rect x="${P}" y="6" width="${W-P-8}" height="${H-P-8}" fill="#fffdf6" stroke="#d8c9a5"/>
+    ${zx}${zy}${mark}
+    <path d="${d}" fill="none" stroke="#3a5a78" stroke-width="1.8"/>
+    <text x="${P}" y="${H-8}" font-size="9" fill="#6b6353">${x0.toFixed(1)}</text>
+    <text x="${W-8}" y="${H-8}" font-size="9" fill="#6b6353" text-anchor="end">${x1.toFixed(1)}</text>
+    <text x="4" y="14" font-size="9" fill="#6b6353">${y1.toFixed(2)}</text>
+    <text x="4" y="${H-P+4}" font-size="9" fill="#6b6353">${y0.toFixed(2)}</text>
+    <text x="${W/2}" y="${H-8}" font-size="9" fill="#6b6353" text-anchor="middle">${o.xlab||''}</text>
+  </svg>`;
+}
+
+function renderCharts(res){
+  const v = res.verdict, p = res.points;
+  const f = (n,d)=>Number(n).toFixed(d===undefined?2:d);
+  const s = res.summary || {};
+  const cards = [
+    {t:"① Cm vs Cl — 自穩定？",
+     svg: chartSvg(p, "CL", "Cm", {xlab:"CL"}),
+     v: v.stable
+        ? `<span class="ok">✅ 斜率 ${f(v.cm_cl_slope,4)} 為負 → 自穩定</span>`
+        : `<span class="bad">❌ 斜率 ${f(v.cm_cl_slope,4)} 為正 → 不穩定，回 STEP 5 把重心往前移</span>`},
+    {t:"② Cl vs α — 會飛？",
+     svg: chartSvg(p, "alpha", "CL", {xlab:"α (°)", markX:0}),
+     v: v.flies
+        ? `<span class="ok">✅ α=0 時 CL = ${f(v.cl_at_zero,3)} > 0</span>`
+        : `<span class="bad">❌ α=0 時 CL = ${f(v.cl_at_zero,3)} ≤ 0 → 加大裝置角或換翼型</span>`},
+    {t:"③ Cm vs α — 配平點",
+     svg: chartSvg(p, "alpha", "Cm", {xlab:"α (°)", markX:v.trim_alpha}),
+     v: v.trim_alpha === null
+        ? `<span class="bad">❌ 在掃描範圍內找不到 Cm=0，飛機配平不了</span>`
+        : `配平攻角 <b>${f(v.trim_alpha)}°</b>（放手後它自己想飛的攻角）`},
+    {t:"④ Cl/Cd vs α — 效率",
+     svg: chartSvg(p, "alpha", "CLCD", {xlab:"α (°)", markX:v.best_ld_alpha}),
+     v: `升阻比峰值 <b>${f(v.best_ld,1)}</b> @ ${f(v.best_ld_alpha,1)}°` +
+        (v.trim_vs_best === null ? "" :
+         (v.trim_vs_best <= 2
+          ? ` — <span class="ok">與配平點只差 ${f(v.trim_vs_best,1)}°，很理想</span>`
+          : ` — <span class="bad">與配平點差 ${f(v.trim_vs_best,1)}°</span>，飛機停在效率差的攻角，回 STEP 3 微調裝置角`))},
+  ];
+  const xnp = s.xnp_m !== undefined
+    ? `<div class="hint" style="margin-top:.4rem">📐 flow5 實算 <b>XNP = ${f(s.xnp_m,4)} m</b>` +
+      (s.static_margin !== undefined ? `、靜穩定裕度 <b>${f(s.static_margin,1)}%</b>` : "") +
+      `　<button class="btn" style="font-size:.8rem;padding:.1rem .6rem"
+        onclick="applyXnp(${s.xnp_m})">↩ 填回上面的 XNP 欄位</button></div>`
+    : "";
+  return `<div class="charts">${cards.map(c=>
+    `<div class="chart"><h4>${c.t}</h4>${c.svg}<div class="cv">${c.v}</div></div>`).join("")}</div>${xnp}`;
+}
+
+function applyXnp(xnpMeters){
+  const o = compute(inputs());
+  state.xnpX = +(xnpMeters * 1000 / o.mac).toFixed(3);   // m → MAC 比例
+  render();
+}
+
+async function doAnalyze(){
+  const box = $("#runResult");
+  const i = inputs(), o = compute(i);
+  const name = (state._fname || "design").replace(/[^\w-]/g, "_") || "plane";
+  box.innerHTML = `<span class="spin"></span> 正在跑 flow5（第一次約需 10~60 秒，視網格大小）...`;
+  const foils = [{name: i.foilData.name, dat: i.foilData.dat || ""},
+                 {name: TAIL_FOIL.name, dat: TAIL_FOIL.dat || ""}];
+  try{
+    const res = await fetch("/api/analyze", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        planeName: name,
+        planeXml: buildFlow5Xml(i, o, name),
+        velocity: i.v,
+        refArea: o.S, refSpan: o.bproj, refChord: o.mac / 1000,
+        viscous: false,
+        alphaMin: -20, alphaMax: 20, alphaStep: 0.5,
+        foils: foils,
+      }),
+    });
+    const j = await res.json();
+    if(!j.ok) throw new Error(j.error);
+    LAST_RESULT = j.result;
+    box.innerHTML = renderCharts(j.result);
+  }catch(e){
+    box.innerHTML = `<div class="chart" style="border-color:var(--bad)">
+      <b style="color:var(--bad)">分析失敗</b><div class="cv">${String(e.message||e)}</div></div>`;
+  }
+}
+
 function doGenXml(){
   const i=inputs(),o=compute(i);
   const name=(state._fname||"design").replace(/[\\/:*?"<>|]/g,"");

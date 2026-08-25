@@ -101,6 +101,42 @@ def _isnum(s):
         return False
 
 
+def to_selig(raw_lines):
+    """把翼型座標正規化成 Selig order（TE -> 上表面 -> LE -> 下表面 -> TE）。
+
+    實測血訓：翼型庫裡混著兩種格式，flow5/xflr5 都**只認 Selig**。把
+    Lednicer 當 Selig 讀不會報錯，而是安靜產生亂掉的剖面——症狀是 α=0 時
+    CL 變成 -2.7 這種離譜值（正常 Clark Y 約 +0.4）、CD 放大二十倍，四張圖
+    全錯但程式一路綠燈。所以務必在餵給 flow5 前正規化。
+
+    判別：Selig 從後緣 (1,0) 起頭；Lednicer 從前緣 (0,0) 起頭，且常有一行
+    「61.0 61.0」之類的「上下表面各幾點」計數列（x 遠大於 1，直接濾掉）。
+    """
+    pts = []
+    for ln in raw_lines:
+        tok = ln.split()
+        if len(tok) < 2 or not (_isnum(tok[0]) and _isnum(tok[1])):
+            continue
+        x, y = float(tok[0]), float(tok[1])
+        if x > 1.5:          # 計數列，不是座標
+            continue
+        pts.append((x, y))
+    if not pts:
+        raise RuntimeError("翼型檔裡找不到座標")
+    if pts[0][0] > 0.9:
+        return pts                                   # 已是 Selig
+    split = len(pts) // 2
+    for i in range(1, len(pts)):
+        if pts[i][0] < pts[i - 1][0]:                # x 回頭 = 第二段開始
+            split = i
+            break
+    upper, lower = pts[:split], pts[split:]
+    if sum(y for _x, y in upper) < sum(y for _x, y in lower):
+        upper, lower = lower, upper                  # 確保 upper 真的在上面
+    return list(reversed(upper)) + lower
+
+
+
 def ensure_foil(name, dat_name, xml_dir):
     """確保 xml_dir 內有這個翼型的 .dat，且檔頭第一行等於 name。
 
@@ -134,13 +170,12 @@ def ensure_foil(name, dat_name, xml_dir):
             "找不到翼型「%s」的座標檔%s——請先用精靈的「一鍵上傳」把它加進"
             "社團翼型庫。" % (name, "（%s）" % dat_name if dat_name else ""))
 
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    first = lines[0].split()
-    is_coord = len(first) >= 2 and all(_isnum(t) for t in first[:2])
-    body = lines if is_coord else lines[1:]
+    pts = to_selig(text.splitlines())
     fname = dat_name or (re.sub(r"[^\w.-]", "_", name) + ".dat")
     with open(os.path.join(xml_dir, fname), "w", encoding="utf-8") as fh:
-        fh.write(name + "\n" + "\n".join(body) + "\n")
+        fh.write(name + chr(10))
+        for x, y in pts:
+            fh.write("  %.6f  %.6f" % (x, y) + chr(10))
     return fname
 
 

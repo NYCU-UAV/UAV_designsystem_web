@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.diag_f5/
+.tmp*/
+*.log
