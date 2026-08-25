@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE flow5>
+<xflscript version="1.0">
+    <Metadata>
+        <Directories>
+            <output_dir>{{OUT_DIR}}</output_dir>
+            <plane_definition_xml_dir>{{XML_DIR}}</plane_definition_xml_dir>
+            <plane_analysis_xml_dir>{{XML_DIR}}</plane_analysis_xml_dir>
+            <foil_files_dir>{{XML_DIR}}</foil_files_dir>
+        </Directories>
+        <MultiThreading>true</MultiThreading>
+        <Double_Precision>true</Double_Precision>
+        <polar_text_output_format>csv</polar_text_output_format>
+        <make_project_file>true</make_project_file>
+        <project_file_name>run.fl5</project_file_name>
+    </Metadata>
+    <Plane_analysis>
+        <Foil_Dat_Files>
+            {{FOIL_FILES}}
+            </Foil_Dat_Files>
+        <Plane_Definition_Files>
+            <Process_All_Files>false</Process_All_Files>
+            <Plane_File_Name>plane.xml</Plane_File_Name>
+        </Plane_Definition_Files>
+        <Plane_Analysis_Files>
+            <Process_All_Files>false</Process_All_Files>
+            <Analysis_File_Name>analysis.xml</Analysis_File_Name>
+        </Plane_Analysis_Files>
+        <Plane_Analysis_Data>
+            <Alpha>{{ALPHA_MIN}}, {{ALPHA_MAX}}, {{ALPHA_STEP}}</Alpha>
+        </Plane_Analysis_Data>
+        <Plane_Analysis_Output>
+            <make_oppoints>true</make_oppoints>
+            <make_polars_text_file>true</make_polars_text_file>
+            <Compute_derivatives>true</Compute_derivatives>
+        </Plane_Analysis_Output>
+    </Plane_analysis>
+</xflscript>
