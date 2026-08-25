@@ -888,12 +888,7 @@ function refreshLive(){
   });
   const rh=$("#runHost");
   if(rh){
-    rh.innerHTML = serverAvailable()
-      ? `<button class="btn primary" onclick="doAnalyze()">▶ 分析（跑 flow5，出四張圖）</button>`
-      : `<div class="hint">⚠ 目前是直接開啟檔案，沒有分析伺服器。<br>
-         要用一鍵分析，請在專案資料夾執行
-         <code>python local/analysis_server.py</code>，它會自動開瀏覽器。<br>
-         社團若已架好共用主機，直接開那台的網址即可，什麼都不用裝。</div>`;
+    rh.innerHTML = renderRunHost();
   }
   const ph=$("#posHint");
   if(ph){
@@ -1361,10 +1356,61 @@ function dl(text,fname,mime){
 /* ---------- 一鍵分析：呼叫本機/社團的分析伺服器，畫出四張圖 ---------- */
 let LAST_RESULT = null;
 
-// 只有從分析伺服器開啟時才有 /api/analyze（直接開檔或 GitHub Pages 上沒有）
-function serverAvailable(){
-  return location.protocol === "http:" || location.protocol === "https:";
+/* 網頁本體永遠是同一份（GitHub Pages）；「分析服務」則是另外一支可有可無的
+   小程式。這裡負責把它找出來，找不到就只是少了分析按鈕，其餘功能照常。
+   找的順序：網址參數 ?api= → 上次記住的 → 開這頁的伺服器自己 → 本機預設埠 */
+const API_DEFAULT = "http://127.0.0.1:8765";
+let API_BASE = null, API_INFO = null;
+
+function apiCandidates(){
+  const out = [];
+  const q = new URLSearchParams(location.search).get("api");
+  if(q) out.push(q.replace(/\/$/, ""));
+  const saved = localStorage.getItem("wf_api");
+  if(saved) out.push(saved.replace(/\/$/, ""));
+  if(location.protocol === "http:") out.push(location.origin);
+  out.push(API_DEFAULT);
+  return [...new Set(out)];
 }
+
+async function findServer(){
+  for(const base of apiCandidates()){
+    try{
+      const c = new AbortController();
+      const t = setTimeout(()=>c.abort(), 1500);
+      const r = await fetch(base + "/api/ping", {signal: c.signal, cache: "no-store"});
+      clearTimeout(t);
+      if(!r.ok) continue;
+      const j = await r.json();
+      if(!j.ok) continue;
+      API_BASE = base; API_INFO = j;
+      localStorage.setItem("wf_api", base);
+      return j;
+    }catch(e){ /* 這個位址沒人在家，換下一個 */ }
+  }
+  API_BASE = null; API_INFO = null;
+  return null;
+}
+
+function serverAvailable(){ return API_BASE !== null; }
+
+function renderRunHost(){
+  if(API_INFO && API_INFO.flow5)
+    return `<button class="btn primary" onclick="doAnalyze()">▶ 分析（跑 flow5，出四張圖）</button>
+      <div class="hint">分析服務：<code>${API_BASE}</code></div>`;
+  if(API_INFO)
+    return `<div class="hint">⚠ 找到分析服務（<code>${API_BASE}</code>），但那台機器上沒裝 flow5，
+      所以不能跑分析。其餘功能（xlsx、Fusion 匯入、flow5 檔案匯出）都正常。</div>`;
+  return `<div class="hint">⚠ 沒找到分析服務，一鍵分析暫時停用 —— <b>其餘功能全部正常</b>
+    （下載 xlsx 拿去 Fusion 匯入、匯出 flow5 檔自己跑，都不需要它）。<br>
+    想要一鍵分析，二選一：<br>
+    ① 自己電腦跑：下載 flow5 後執行 <code>python local/analysis_server.py</code>，
+       這頁會自動接上（不用換網址）。<br>
+    ② 社團共用主機：把網址加上 <code>?api=https://主機位址</code> 開一次，之後會自動記住。
+    <button class="btn" style="margin-top:8px" onclick="reScan()">重新偵測</button></div>`;
+}
+
+async function reScan(){ await findServer(); refreshLive(); }
 
 function chartSvg(pts, xk, yk, opts){
   const o = opts || {};
@@ -1444,7 +1490,7 @@ async function doAnalyze(){
   const foils = [{name: i.foilData.name, dat: i.foilData.dat || ""},
                  {name: TAIL_FOIL.name, dat: TAIL_FOIL.dat || ""}];
   try{
-    const res = await fetch("/api/analyze", {
+    const res = await fetch(API_BASE + "/api/analyze", {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         planeName: name,
@@ -1515,6 +1561,8 @@ $("#btnPrev").onclick=()=>{if(state.step>0)go(state.step-1)};
 $("#btnNext").onclick=()=>{if(state.step<STEPS.length-1)go(state.step+1)};
 ensureVeeDefaults();
 render();
+// 開頁後在背景找分析服務，找到就把「分析」按鈕點亮（找不到不影響任何其他功能）
+findServer().then(()=>refreshLive());
 </script>
 </body>
 </html>

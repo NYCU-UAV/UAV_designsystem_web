@@ -325,12 +325,48 @@ def run_analysis(payload):
         shutil.rmtree(work, ignore_errors=True)
 
 
+SERVER_VERSION = "1.1"
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=ROOT, **kw)
 
     def log_message(self, fmt, *args):
         sys.stderr.write("  %s\n" % (fmt % args))
+
+    def _cors(self):
+        """網頁本體住在 GitHub Pages、分析服務住在這裡（不同來源），
+        所以一定要放行跨來源請求，否則瀏覽器連問都不會問就擋掉。"""
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        # Chrome 的 Private Network Access：從公開網站（GitHub Pages）打
+        # 本機服務要多這一句，否則預檢就被擋掉。
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def _json(self, obj, code=200):
+        body = json.dumps(obj).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):
+        # 網頁用這支確認「分析服務在不在」，順便回報 flow5 有沒有裝好
+        if self.path.split("?")[0] == "/api/ping":
+            exe = find_flow5()
+            self._json({"ok": True, "flow5": bool(exe),
+                        "path": exe or "", "version": SERVER_VERSION})
+            return
+        super().do_GET()
 
     def do_POST(self):
         if self.path != "/api/analyze":
@@ -349,6 +385,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self._cors()
         self.end_headers()
         self.wfile.write(body)
 
