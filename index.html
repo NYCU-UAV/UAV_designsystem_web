@@ -1094,6 +1094,13 @@ function refreshLive(){
   const rh=$("#runHost");
   if(rh){
     rh.innerHTML = renderRunHost();
+    const rr = $("#runResult");
+    if(rr && !rr.innerHTML && LAST_RESULT){
+      const stale = LAST_RESULT.fp !== analysisFingerprint();
+      rr.innerHTML = renderCharts(LAST_RESULT) + (stale
+        ? `<div class="hint">⚠ 上面是<b>之前的結果</b>——幾何／速度／重心後來改過了，按「分析」重跑才是現在這台。</div>`
+        : "");
+    }
   }
   const ph=$("#posHint");
   if(ph){
@@ -1701,6 +1708,12 @@ function applyXnp(xnpMeters){
   render();
 }
 
+/* 這次分析對應哪一台飛機——切回 STEP 8 時用來判斷結果還新不新鮮 */
+function analysisFingerprint(){
+  const i = inputs(), o = compute(i);
+  return JSON.stringify([buildPlaneGeom(i,o), i.v, i.xcg]);
+}
+
 /* ---------- 一鍵分析：瀏覽器內渦格法，按下去零點幾秒出四張圖 ----------
    實測與 flow5 對拍（教練機/Clark Y）：CL 差 2%、dCm/dCL 差 3%、配平角差
    0.15°、XNP 差 4.5% MAC——落在 flow5 自家不同方法之間的差異範圍內。 */
@@ -1733,7 +1746,7 @@ async function doAnalyze(){
       velocity: i.v, xcgM: i.xcg * o.mac / 1000,
       alphaMin: -20, alphaMax: 20, alphaStep: 0.5, viscous: true,
     });
-    LAST_RESULT = res;
+    LAST_RESULT = res; LAST_RESULT.fp = analysisFingerprint();
     let warn = "";
     if(res.summary.missing_foils.length)
       warn = `<div class="hint">⚠ 抓不到翼型檔 <code>${res.summary.missing_foils.join("、")}</code>，
@@ -1770,7 +1783,7 @@ async function doAnalyzeFlow5(){
     if(!j.ok) throw new Error(j.error);
     j.result.summary = j.result.summary || {};
     j.result.summary.method = "flow5";
-    LAST_RESULT = j.result;
+    LAST_RESULT = j.result; LAST_RESULT.fp = analysisFingerprint();
     box.innerHTML = renderCharts(j.result);
   }catch(e){
     box.innerHTML = `<div class="chart" style="border-color:var(--bad)">
