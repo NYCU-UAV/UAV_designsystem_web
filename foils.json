@@ -109,5 +109,17 @@
   "aoaCruise": null,
   "note": "由 Issue 自動提交",
   "url": ""
+ },
+ {
+  "name": "S2050 8.93%",
+  "dat": "s2050.dat",
+  "have": true,
+  "cls": [],
+  "clmax": 1.1,
+  "clCruise": 0.55,
+  "aoaStall": null,
+  "aoaCruise": null,
+  "note": "由 Issue 自動提交",
+  "url": "http://airfoiltools.com/airfoil/details?airfoil=s2050-il"
  }
 ]
