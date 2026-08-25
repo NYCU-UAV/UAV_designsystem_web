@@ -1316,7 +1316,7 @@ function layoutSvg(i,o){
     <path class="lz-wing" d="${wing}"/>
     ${tail}
     <line class="lz-dim" x1="${xN}" y1="${half+28}" x2="${xT}" y2="${half+28}"/>
-    <text class="lz-lb" x="${(xN+xT)/2}" y="${half+22}">全長 ≈ ${o.totalLen.toFixed(0)} mm　·　1 格＝真實比例</text>
+    <text class="lz-lb" x="${(xN+xT)/2}" y="${half+22}">全長 ≈ ${o.totalLen.toFixed(0)} mm（等比例俯視）</text>
     <g class="lz-cg" transform="translate(${xcg},0)">
       <circle r="9"/><path d="M0,-9 A9,9 0 0 1 9,0 L0,0 Z"/><path d="M0,9 A9,9 0 0 1 -9,0 L0,0 Z"/>
       <text y="-16" x="0">CG ${xcg.toFixed(0)}</text>
