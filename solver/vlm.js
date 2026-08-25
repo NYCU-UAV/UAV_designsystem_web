@@ -366,21 +366,15 @@
   }
 
   /* =====================================================================
-     主流程：solve()
+     模型建構：幾何+矩陣+LU 全部準備好，之後任何攻角都能便宜地解
+     （四張圖掃 81 個攻角、流場動畫拖滑桿，都是同一個 model 重複用）
      ===================================================================== */
-  function solve(params) {
+  function buildModel(params) {
     var geom = params.geom;
-    var foilDb = params.foils || {};          // { 翼型名: dat 檔文字 或 null }
+    var foilDb = params.foils || {};
     var V = params.velocity || 12;
     var rho = params.rho || 1.225, nu = params.nu || 1.46e-5;
-    var xcg = params.xcgM || 0;               // CG 的 x（m，主翼前緣=0）
-    var a0 = params.alphaMin !== undefined ? params.alphaMin : -20;
-    var a1 = params.alphaMax !== undefined ? params.alphaMax : 20;
-    var da = params.alphaStep || 0.5;
-    var viscous = params.viscous !== false;
 
-    // 翼型名 → 中弧線。有 dat 用 dat；名字像 NACA 四位數就用解析式；
-    // 都沒有就當平板（並記下來讓 UI 能提醒）。
     var camberCache = {}, missing = [];
     function foilOf(name) {
       if (camberCache[name]) return camberCache[name];
@@ -398,10 +392,8 @@
     var mesh = panelize(geom, foilOf, params.mesh);
     var P = mesh.panels, N = P.length;
     var ref = referenceDims(geom);
-    var S = ref.S, mac = ref.mac;
     var far = Math.max(ref.b, 1) * 100;
 
-    // 影響係數矩陣 A（控制點法向速度）與受力點速度影響矩陣 W（3 分量）
     var A = new Array(N), Wx = new Array(N), Wy = new Array(N), Wz = new Array(N);
     for (var i = 0; i < N; i++) {
       A[i] = new Float64Array(N);
@@ -410,54 +402,148 @@
       for (var j = 0; j < N; j++) {
         var v = horseshoe(cp, P[j].a, P[j].b, far, false);
         A[i][j] = dot(v, n);
-        var w = horseshoe(mid, P[j].a, P[j].b, far, i === j);  // 不受自己束縛渦影響
+        var w = horseshoe(mid, P[j].a, P[j].b, far, i === j);
         Wx[i][j] = w[0]; Wy[i][j] = w[1]; Wz[i][j] = w[2];
       }
     }
     var lu = luDecompose(A, N);
 
-    // 黏性阻力（與 α 無關）：每條帶 2·Cf(Re)·FF(t/c)，Sref 正規化
     var CDv = 0;
-    if (viscous) {
+    if (params.viscous !== false) {
       mesh.strips.forEach(function (st) {
         var Re = V * st.chord / nu;
         var Cf = Re < 3.5e5 ? 1.328 / Math.sqrt(Re) : 0.074 / Math.pow(Re, 0.2);
         var FF = 1 + 2.7 * st.tc + 100 * Math.pow(st.tc, 4);
-        CDv += 2 * Cf * FF * st.area / S;
+        CDv += 2 * Cf * FF * st.area / ref.S;
       });
     }
 
-    var q = 0.5 * rho * V * V;
+    // 對稱面 y=0 的機身側影（畫流場圖用）：各翼根弦的中弧線
+    var profile = [];
+    geom.wings.forEach(function (w) {
+      var s0 = w.sections[0];
+      var foil = foilOf(s0.foil);
+      var c = s0.chord * 0.001, tw = (s0.twist || 0) * DEG;
+      var x0 = (w.position[0] + s0.xOffset) * 0.001, z0 = w.position[2] * 0.001;
+      var pts = [];
+      if (w.type === "FIN") {
+        var sTip = w.sections[w.sections.length - 1];
+        var h = sTip.y * 0.001, cT = sTip.chord * 0.001;
+        var xT = x0 + sTip.xOffset * 0.001;
+        pts = [[x0, z0], [x0 + c, z0], [xT + cT, z0 + h], [xT, z0 + h], [x0, z0]];
+      } else {
+        for (var k = 0; k <= 24; k++) {
+          var f = k / 24;
+          var xr = f * Math.cos(tw) + foil.z(f) * Math.sin(tw);
+          var zr = -f * Math.sin(tw) + foil.z(f) * Math.cos(tw);
+          pts.push([x0 + xr * c, z0 + zr * c]);
+        }
+      }
+      profile.push({ name: w.name, fin: w.type === "FIN", pts: pts });
+    });
+
+    return { P: P, N: N, strips: mesh.strips, lu: lu, Wx: Wx, Wy: Wy, Wz: Wz,
+             ref: ref, far: far, CDv: CDv, V: V, rho: rho,
+             xcg: params.xcgM || 0, missing: missing, profile: profile };
+  }
+
+  /* 解單一攻角：一次 LU 回代 + Kutta-Joukowski 積分 */
+  function solveAlpha(M, alpha) {
+    var N = M.N, P = M.P, V = M.V;
+    var ca = Math.cos(alpha * DEG), sa = Math.sin(alpha * DEG);
+    var Vinf = [V * ca, 0, V * sa];
+    var liftDir = [-sa, 0, ca], dragDir = [ca, 0, sa];
+
+    var rhs = new Float64Array(N);
+    for (var r = 0; r < N; r++) rhs[r] = -dot(Vinf, P[r].n);
+    var G = luSolve(M.lu, rhs);
+
+    var q = 0.5 * M.rho * V * V, S = M.ref.S, mac = M.ref.mac;
+    var L = 0, Di = 0, My = 0;
+    for (var p = 0; p < N; p++) {
+      var wl = [0, 0, 0], Wxp = M.Wx[p], Wyp = M.Wy[p], Wzp = M.Wz[p];
+      for (var j = 0; j < N; j++) {
+        wl[0] += Wxp[j] * G[j]; wl[1] += Wyp[j] * G[j]; wl[2] += Wzp[j] * G[j];
+      }
+      var U = add(Vinf, wl);
+      var F = mul(cross(U, P[p].s), M.rho * G[p]);
+      L += dot(F, liftDir);
+      Di += dot(F, dragDir);
+      var rel = sub(P[p].mid, [M.xcg, 0, 0]);
+      My += rel[2] * F[0] - rel[0] * F[2];
+    }
+    var CL = L / (q * S), CDi = Di / (q * S), Cm = My / (q * S * mac);
+    var CD = CDi + M.CDv;
+    return { alpha: alpha, CL: CL, CD: CD, CDi: CDi, Cm: Cm,
+             CLCD: Math.abs(CD) > 1e-9 ? CL / CD : 0, G: G, Vinf: Vinf };
+  }
+
+  /* 全流場任一點的速度（自由流 + 所有馬蹄渦的誘導） */
+  function velocityAt(M, G, Vinf, pt) {
+    var v = [Vinf[0], Vinf[1], Vinf[2]];
+    for (var j = 0; j < M.N; j++) {
+      var w = horseshoe(pt, M.P[j].a, M.P[j].b, M.far, false);
+      v = add(v, mul(w, G[j]));
+    }
+    return v;
+  }
+
+  /* =====================================================================
+     流線：在對稱面 y=0 從上游撒種子點，沿速度場 RK2 積分。
+     這是「上面同一組渦格解」的直接視覺化——翼前上洗、翼後下洗、
+     尾翼吃到的下洗角，全部是算出來的，不是畫的。
+     ===================================================================== */
+  function streamlines(M, alpha, opts) {
+    var o = opts || {};
+    var pt = solveAlpha(M, alpha);
+    var G = pt.G, Vinf = pt.Vinf;
+
+    // 幾何包絡（m）
+    var xmin = 1e9, xmax = -1e9, zmin = 1e9, zmax = -1e9;
+    M.profile.forEach(function (pr) {
+      pr.pts.forEach(function (p) {
+        if (p[0] < xmin) xmin = p[0]; if (p[0] > xmax) xmax = p[0];
+        if (p[1] < zmin) zmin = p[1]; if (p[1] > zmax) zmax = p[1];
+      });
+    });
+    var L = Math.max(xmax - xmin, 0.2);
+    var nL = o.nLines || 13;
+    var x0 = xmin - 0.35 * L, x1 = xmax + 0.4 * L;
+    var zLo = zmin - 0.3 * L, zHi = zmax + 0.35 * L;
+    var ds = L / (o.stepsPerChord || 110);
+    var lines = [];
+    for (var s = 0; s < nL; s++) {
+      var z = zLo + (zHi - zLo) * s / (nL - 1);
+      var p = [x0, 0, z], line = [[p[0], p[2]]];
+      for (var st = 0; st < 500 && p[0] < x1; st++) {
+        var v1 = velocityAt(M, G, Vinf, p);
+        var sp1 = norm(v1); if (sp1 < 1e-6) break;
+        var mid = add(p, mul(v1, ds / sp1 * 0.5));
+        var v2 = velocityAt(M, G, Vinf, mid);
+        var sp2 = norm(v2); if (sp2 < 1e-6) break;
+        p = add(p, mul(v2, ds / sp2));
+        line.push([p[0], p[2]]);
+      }
+      lines.push(line);
+    }
+    return { lines: lines, point: { alpha: pt.alpha, CL: pt.CL, Cm: pt.Cm, CLCD: pt.CLCD },
+             box: { x0: x0, x1: x1, z0: zLo, z1: zHi } };
+  }
+
+  /* =====================================================================
+     主流程：solve() —— 掃迎角、產四張圖的資料與判讀
+     ===================================================================== */
+  function solve(params) {
+    var M = params.model || buildModel(params);
+    var a0 = params.alphaMin !== undefined ? params.alphaMin : -20;
+    var a1 = params.alphaMax !== undefined ? params.alphaMax : 20;
+    var da = params.alphaStep || 0.5;
+
     var pts = [];
     var nA = Math.round((a1 - a0) / da);
     for (var ia = 0; ia <= nA; ia++) {
-      var alpha = a0 + ia * da;
-      var ca = Math.cos(alpha * DEG), sa = Math.sin(alpha * DEG);
-      var Vinf = [V * ca, 0, V * sa];
-      var liftDir = [-sa, 0, ca], dragDir = [ca, 0, sa];
-
-      var rhs = new Float64Array(N);
-      for (var r2 = 0; r2 < N; r2++) rhs[r2] = -dot(Vinf, P[r2].n);
-      var G = luSolve(lu, rhs);
-
-      var L = 0, Di = 0, My = 0;
-      for (var p2 = 0; p2 < N; p2++) {
-        var wl = [0, 0, 0];
-        var Wxp = Wx[p2], Wyp = Wy[p2], Wzp = Wz[p2];
-        for (var j2 = 0; j2 < N; j2++) {
-          wl[0] += Wxp[j2] * G[j2]; wl[1] += Wyp[j2] * G[j2]; wl[2] += Wzp[j2] * G[j2];
-        }
-        var U = add(Vinf, wl);
-        var F = mul(cross(U, P[p2].s), rho * G[p2]);   // Kutta-Joukowski
-        L += dot(F, liftDir);
-        Di += dot(F, dragDir);
-        var rel = sub(P[p2].mid, [xcg, 0, 0]);
-        My += rel[2] * F[0] - rel[0] * F[2];            // 抬頭為正
-      }
-      var CL = L / (q * S), CDi = Di / (q * S), Cm = My / (q * S * mac);
-      var CD = CDi + CDv;
-      pts.push({ alpha: alpha, CL: CL, CD: CD, CDi: CDi, Cm: Cm,
-                 CLCD: Math.abs(CD) > 1e-9 ? CL / CD : 0 });
+      var r = solveAlpha(M, a0 + ia * da);
+      pts.push({ alpha: r.alpha, CL: r.CL, CD: r.CD, CDi: r.CDi, Cm: r.Cm, CLCD: r.CLCD });
     }
 
     // 判讀（與 analysis_server.py 的 build_charts 同一套邏輯）
@@ -479,7 +565,7 @@
     var bi = 0;
     for (var b2 = 1; b2 < ld.length; b2++) if (ld[b2] > ld[bi]) bi = b2;
 
-    var xnp = xcg - slope * mac;               // Cm = Cm0 + (xcg−xnp)/mac · CL
+    var xnp = M.xcg - slope * M.ref.mac;
     return {
       points: pts,
       verdict: {
@@ -491,17 +577,20 @@
       },
       summary: {
         xnp_m: xnp,
-        static_margin: mac > 0 ? (xnp - xcg) / mac * 100 : 0,
-        S: S, b: ref.b, mac: mac,
-        cd_viscous: CDv, n_panels: N,
-        method: "VLM-JS" + (viscous ? "+平板摩擦" : "（無黏）"),
-        missing_foils: missing,
+        static_margin: M.ref.mac > 0 ? (xnp - M.xcg) / M.ref.mac * 100 : 0,
+        S: M.ref.S, b: M.ref.b, mac: M.ref.mac,
+        cd_viscous: M.CDv, n_panels: M.N,
+        method: "VLM-JS" + (params.viscous !== false ? "+平板摩擦" : "（無黏）"),
+        missing_foils: M.missing,
       },
     };
   }
 
   return {
     solve: solve,
+    buildModel: buildModel,
+    solveAlpha: solveAlpha,
+    streamlines: streamlines,
     panelize: panelize,
     referenceDims: referenceDims,
     parseDatSelig: parseDatSelig,

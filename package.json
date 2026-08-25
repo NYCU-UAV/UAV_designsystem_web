@@ -1,0 +1,8 @@
+{
+  "name": "uav-designsystem-web",
+  "private": true,
+  "description": "NYCU UAV 飛機設計填表精靈：靜態精靈 + 瀏覽器內 VLM + 專案資料庫 API",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

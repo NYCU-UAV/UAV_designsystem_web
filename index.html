@@ -77,6 +77,22 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .chart svg{width:100%;height:auto;display:block}
 .chart .ok{color:var(--ok);font-weight:700}
 .chart .bad{color:var(--bad);font-weight:700}
+.flowbox{grid-column:1/-1}
+.flowbox svg{width:100%;height:auto;display:block;background:#f4efe2;border-radius:.4rem}
+.flowline{fill:none;stroke:#3a6ea5;stroke-width:1.2;stroke-dasharray:5 4;animation:flowdash .55s linear infinite}
+@keyframes flowdash{to{stroke-dashoffset:-9}}
+.flowbody{fill:#6b5b3e;stroke:#4a3d2a;stroke-width:1}
+.flowbox input[type=range]{width:12rem;vertical-align:middle}
+.projbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:.3rem 0 .5rem;
+  font-size:.92rem;color:var(--ink2)}
+.projbar b{color:var(--ink)}
+#projPanel{border:1.5px solid var(--line);border-radius:.6rem;background:#fffdf6;
+  padding:.8rem;margin-bottom:.7rem}
+#projPanel h3{margin:.2rem 0 .4rem;font-size:1rem}
+#projPanel table{width:100%;border-collapse:collapse;font-size:.88rem}
+#projPanel td,#projPanel th{padding:.25rem .5rem;border-bottom:1px solid var(--line);text-align:left}
+#projPanel tr.sel{background:#f6efdd}
+#projPanel input[type=text]{padding:.3rem .5rem;border:1.5px solid var(--line);border-radius:.4rem}
 .runbox{border:2px solid var(--blue);border-radius:.55rem;background:#eef2f6;
   padding:.8rem 1rem;margin:.8rem 0}
 .runbox h3{color:var(--blue);font-size:1.02rem;margin-bottom:.3rem}
@@ -171,6 +187,8 @@ code{font-family:Consolas,monospace;background:#efe6cd;border-radius:.25rem;padd
 </header>
 
 <div class="flowmap" id="flowmap"></div>
+<div class="projbar" id="projBar"></div>
+<div id="projPanel" class="hidden"></div>
 <div class="steps" id="stepbar"></div>
 <div id="stepHost"></div>
 
@@ -223,32 +241,32 @@ const PRESETS = {
   d:{mtow:700, v:12, chord:220, span:1200, taper:0.7, dihedral:5, washout:1,
      incidence:2, tegap:0, gap:60, foil:"Clark Y", noseC:1.25, tailC:2.5, xcg:0.35,
      shr:0.15, arh:4, th:0.6, svr:0.08, arv:1.5, tv:0.6, tailType:"cross",
-     motorW:150, thrust:500, vtol:0, liftThrust:0}},
+     motorW:150, thrust:500, vtol:0, liftThrust:0, htailInc:0, htailDz:0}},
  park:{label:"公園慢速機", desc:"更輕更慢，小場地飛",
   d:{mtow:450, v:9, chord:200, span:1100, taper:0.8, dihedral:6, washout:1,
      incidence:2, tegap:0, gap:50, foil:"Clark Y", noseC:1.25, tailC:2.3, xcg:0.33,
      shr:0.18, arh:4, th:0.7, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
-     motorW:100, thrust:350, vtol:0, liftThrust:0}},
+     motorW:100, thrust:350, vtol:0, liftThrust:0, htailInc:0, htailDz:0}},
  sport:{label:"運動機", desc:"會飛了之後的第二台",
   d:{mtow:1100, v:16, chord:240, span:1300, taper:0.65, dihedral:3, washout:1,
      incidence:1.5, tegap:0, gap:70, foil:"NACA 2412", noseC:1.3, tailC:2.6, xcg:0.33,
      shr:0.16, arh:4, th:0.6, svr:0.08, arv:1.6, tv:0.6, tailType:"cross",
-     motorW:300, thrust:1000, vtol:0, liftThrust:0}},
+     motorW:300, thrust:1000, vtol:0, liftThrust:0, htailInc:0, htailDz:0}},
  glider:{label:"電動滑翔機", desc:"追熱氣流、慢慢飄",
   d:{mtow:800, v:9, chord:180, span:2000, taper:0.6, dihedral:4, washout:1.5,
      incidence:2, tegap:0, gap:50, foil:"SD7037", noseC:1.2, tailC:2.8, xcg:0.36,
      shr:0.12, arh:4.5, th:0.6, svr:0.07, arv:1.6, tv:0.6, tailType:"vee",
-     motorW:200, thrust:600, vtol:0, liftThrust:0}},
+     motorW:200, thrust:600, vtol:0, liftThrust:0, htailInc:0, htailDz:0}},
  vtolq:{label:"VTOL 四旋翼定翼機", desc:"垂直起降＋定翼巡航（quad plane）",
   d:{mtow:2200, v:15, chord:250, span:1600, taper:0.7, dihedral:3, washout:1,
      incidence:2, tegap:0, gap:80, foil:"Clark Y", noseC:1.2, tailC:2.5, xcg:0.33,
      shr:0.16, arh:4, th:0.6, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
-     motorW:400, thrust:1400, vtol:4, liftThrust:1100}},
+     motorW:400, thrust:1400, vtol:4, liftThrust:1100, htailInc:0, htailDz:0}},
  tilt:{label:"VTOL 傾轉旋翼機", desc:"前傾轉×2＋尾×1，巡航效率較好但機構複雜",
   d:{mtow:1600, v:16, chord:230, span:1500, taper:0.7, dihedral:3, washout:1,
      incidence:2, tegap:0, gap:70, foil:"Clark Y", noseC:1.25, tailC:2.5, xcg:0.33,
      shr:0.16, arh:4, th:0.6, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
-     motorW:350, thrust:1100, vtol:3, liftThrust:900}},
+     motorW:350, thrust:1100, vtol:3, liftThrust:900, htailInc:0, htailDz:0}},
 };
 
 /* 構型層（QGC Airframe 的邏輯）：先選構型、再選起始值模板。
@@ -335,7 +353,8 @@ function compute(i){
   const autoFin = i.xcg*o.mac + o.lv - 0.25*(T==="vee"?o.tailAvgC:o.cvAvg);
   o.htailLeX = (i.htailX>0) ? i.htailX : autoHt;
   o.finLeX = (i.finX>0) ? i.finX : autoFin;
-  o.htailZ = (T==="tee") ? o.bv*1000 : 0;   // T 尾：平尾在 fin 頂
+  // T 尾自動墊到 fin 頂；htailDz 是使用者指定的「相對主翼平面高度」（可負）
+  o.htailZ = ((T==="tee") ? o.bv*1000 : 0) + (i.htailDz||0);
   o.finY = (T==="hh"||T==="box") ? o.bh*1000/2 : 0;   // 雙垂尾在平尾兩端
   o.boxTopZ = o.bv*1000;
   // 動力
@@ -396,6 +415,15 @@ function checks(i,o){
     const p = o.tr<0.4?["bad","爬升吃力"]:o.tr<0.6?["warn","滑翔/慢速夠用"]
       :o.tr<0.8?["ok","教練/運動 OK"]:o.tr<1.1?["ok","很有勁"]:["ok","垂直性能級"];
     c.push([p[0],"靜推重比",fmt(o.tr),p[1]]);
+  }
+  {
+    // 裝置角差（decalage）＝主翼裝置角 − 尾翼裝置角。要正的（尾翼迎角較小）
+    // 縱向才穩得順：朱寶鎏《模型飛機飛行原理》建議 1~3°。
+    const dec = i.incidence - (i.htailInc||0);
+    const p = dec<0?["bad","尾翼裝置角比主翼大——配平會打架，把尾翼調小"]
+      :dec<1?["warn","偏小，配平範圍窄"]:dec<=3.5?["ok","教科書區間"]
+      :["warn","偏大，高速時低頭力矩重"];
+    c.push([p[0],"裝置角差（主翼−尾翼）",fmt(dec,1)+"°",p[1]]);
   }
   if(i.vtol>0 && i.liftThrust>0){
     // PX4 官方建議懸停推重比至少 1.5:1、舒適 2:1（quadplane 同標準）
@@ -507,7 +535,7 @@ function buildXlsxBytes(i,o,fileName){
     exportRows.push(["vee.le_x_mm",o.htailLeX]);
   }else{
     exportRows.push(
-      ["htail.le_x_mm",o.htailLeX],["htail.z_mm",o.htailZ],
+      ["htail.le_x_mm",o.htailLeX],["htail.z_mm",o.htailZ],["htail.incidence_deg",i.htailInc||0],
       ["fin.count",o.finCount],["fin.le_x_mm",o.finLeX],
       ["fin.y_mm",o.finY],["fin.z_mm",0]);
     if(T==="box") exportRows.push(
@@ -603,14 +631,15 @@ function buildXflr5Xml(i,o,name){
     sec(0, i.chord, 0, i.dihedral, i.incidence, foil)+
     sec(i.span/2, o.ct, 0.25*(i.chord-o.ct), 0, i.incidence-i.washout, foil);
   let tailWings="";
+  const tInc=i.htailInc||0, tDz=i.htailDz||0;
   if(T==="vee"){
-    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,0],false,
-      sec(0, i.veeCr, 0, i.veeAngle, 0, TAIL_FOIL.name)+
-      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, 0, TAIL_FOIL.name));
+    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,tDz],false,
+      sec(0, i.veeCr, 0, i.veeAngle, tInc, TAIL_FOIL.name)+
+      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, tInc, TAIL_FOIL.name));
   }else{
     tailWings = wing("Elevator","ELEVATOR",[o.htailLeX,0,o.htailZ],false,
-      sec(0, o.chRoot, 0, 0, 0, TAIL_FOIL.name)+
-      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, 0, TAIL_FOIL.name));
+      sec(0, o.chRoot, 0, 0, tInc, TAIL_FOIL.name)+
+      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, tInc, TAIL_FOIL.name));
     // hh/box 在 xflr5 以「等效單垂尾」近似：兩片各 Sv/2、同弦長 →
     // 高度加倍即得總面積 Sv 的單片（Vv 等效，橫航向穩定性量級一致）。
     tailWings += wing("Fin","FIN",[o.finLeX,0,0],true,
@@ -662,14 +691,15 @@ function buildPlaneGeom(i,o){
   const wings=[{name:"Main Wing",type:"MAINWING",position:[0,0,0],sections:[
     S(0,i.chord,0,i.dihedral,i.incidence,foil),
     S(i.span/2,o.ct,0.25*(i.chord-o.ct),0,i.incidence-i.washout,foil)]}];
+  const ti=i.htailInc||0, tz=i.htailDz||0;
   if(T==="vee"){
-    wings.push({name:"V-Tail",type:"ELEVATOR",position:[o.htailLeX,0,0],sections:[
-      S(0,i.veeCr,0,i.veeAngle,0,TAIL_FOIL.name),
-      S(o.veeSpanY,o.veeCt,0.25*(i.veeCr-o.veeCt),0,0,TAIL_FOIL.name)]});
+    wings.push({name:"V-Tail",type:"ELEVATOR",position:[o.htailLeX,0,tz],sections:[
+      S(0,i.veeCr,0,i.veeAngle,ti,TAIL_FOIL.name),
+      S(o.veeSpanY,o.veeCt,0.25*(i.veeCr-o.veeCt),0,ti,TAIL_FOIL.name)]});
   }else{
     wings.push({name:"Elevator",type:"ELEVATOR",position:[o.htailLeX,0,o.htailZ],sections:[
-      S(0,o.chRoot,0,0,0,TAIL_FOIL.name),
-      S(o.bh*1000/2,o.chTip,0.25*(o.chRoot-o.chTip),0,0,TAIL_FOIL.name)]});
+      S(0,o.chRoot,0,0,ti,TAIL_FOIL.name),
+      S(o.bh*1000/2,o.chTip,0.25*(o.chRoot-o.chTip),0,ti,TAIL_FOIL.name)]});
     // hh/box 以等效單垂尾近似：兩片各 Sv/2、同弦長，高度加倍即等面積
     wings.push({name:"Fin",type:"FIN",position:[o.finLeX,0,0],sections:[
       S(0,o.cvRoot,0,0,0,TAIL_FOIL.name),
@@ -731,172 +761,6 @@ function buildFlow5Xml(i,o,name){
     <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
    </Point_Mass>
   </Inertia>${g.wings.map(wing).join("")}
- </Plane>
-</xflplane>
-`;
-}
-
-/* ---------- xflr5 飛機定義 XML（Plane > Import Plane(s) from xml file(s)） ---------- */
-function buildXflr5Xml(i,o,name){
-  const T=i.tailType||"cross";
-  const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
-  const sec=(y,chord,xoff,dihe,twist,foil)=>`
-    <Section>
-     <y_position>${M(y)}</y_position>
-     <Chord>${M(chord)}</Chord>
-     <xOffset>${M(xoff)}</xOffset>
-     <Dihedral>${dihe.toFixed(2)}</Dihedral>
-     <Twist>${twist.toFixed(2)}</Twist>
-     <x_number_of_panels>13</x_number_of_panels>
-     <x_panel_distribution>COSINE</x_panel_distribution>
-     <y_number_of_panels>19</y_number_of_panels>
-     <y_panel_distribution>UNIFORM</y_panel_distribution>
-     <Left_Side_FoilName>${E(foil)}</Left_Side_FoilName>
-     <Right_Side_FoilName>${E(foil)}</Right_Side_FoilName>
-    </Section>`;
-  const wing=(wname,type,pos,isFin,sections)=>`
-   <wing>
-    <Name>${E(wname)}</Name>
-    <Type>${type}</Type>
-    <Position>${pos.map(v=>(v/1000).toFixed(6)).join(", ")}</Position>
-    <Tilt_angle>0.000</Tilt_angle>
-    <Symetric>${isFin?"false":"true"}</Symetric>
-    <isFin>${isFin?"true":"false"}</isFin>
-    <isDoubleFin>false</isDoubleFin>
-    <isSymFin>false</isSymFin>
-    <Inertia><Volume_Mass>0.000</Volume_Mass></Inertia>
-    <Sections>${sections}</Sections>
-   </wing>`;
-  const foil=i.foilData.name;
-  // 主翼：2 站位；xflr5 的 Dihedral 是「本段」屬性→掛在起始剖面，
-  // 末剖面的 Dihedral 被忽略（官方 wing.cpp 語意），慣例填 0。
-  // 展向用 span/2（自中線起算的完整梯形）而非扣機身的翼段半展——
-  // VLM 慣例把機身段升力視為連續，這也是精靈算 S/AR/Vh 的口徑，
-  // 兩邊一致 xflr5 才是在驗證「同一台飛機」。
-  const mainSecs =
-    sec(0, i.chord, 0, i.dihedral, i.incidence, foil)+
-    sec(i.span/2, o.ct, 0.25*(i.chord-o.ct), 0, i.incidence-i.washout, foil);
-  let tailWings="";
-  if(T==="vee"){
-    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,0],false,
-      sec(0, i.veeCr, 0, i.veeAngle, 0, TAIL_FOIL.name)+
-      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, 0, TAIL_FOIL.name));
-  }else{
-    tailWings = wing("Elevator","ELEVATOR",[o.htailLeX,0,o.htailZ],false,
-      sec(0, o.chRoot, 0, 0, 0, TAIL_FOIL.name)+
-      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, 0, TAIL_FOIL.name));
-    // hh/box 在 xflr5 以「等效單垂尾」近似：兩片各 Sv/2、同弦長 →
-    // 高度加倍即得總面積 Sv 的單片（Vv 等效，橫航向穩定性量級一致）。
-    tailWings += wing("Fin","FIN",[o.finLeX,0,0],true,
-      sec(0, o.cvRoot, 0, 0, 0, TAIL_FOIL.name)+
-      sec(o.bv*1000*((T==="hh"||T==="box")?2:1), o.cvTip,
-          0.25*(o.cvRoot-o.cvTip), 0, 0, TAIL_FOIL.name));
-  }
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE explane>
-<explane version="1.0">
- <Units>
-  <length_unit_to_meter>1</length_unit_to_meter>
-  <mass_unit_to_kg>1</mass_unit_to_kg>
- </Units>
- <Plane>
-  <Name>${E(name)}</Name>
-  <Description>由 NYCU UAV 填表精靈產生</Description>
-  <Inertia>
-   <Point_Mass>
-    <Tag>全機質量</Tag>
-    <Mass>${(i.mtow/1000).toFixed(4)}</Mass>
-    <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
-   </Point_Mass>
-  </Inertia>
-  <has_body>false</has_body>${wing("Main Wing","MAINWING",[0,0,0],false,mainSecs)}${tailWings}
- </Plane>
-</explane>
-`;
-}
-
-/* ---------- flow5 飛機 XML（Plane > import plane from xml） ----------
-   flow5 是 xflr5 的第 7 版（同作者），2026 起 GPL-3.0 開源免費。
-   格式對照官方樣本 API_examples/PlaneRun4/xml/plane.xml 逐標籤確認：
-   - 根元素 <xflplane version="1.0">、DOCTYPE flow5（xflr5 是 explane）
-   - Units 多了 area / speed / inertia 三個換算係數
-   - wing 層：symmetric（xflr5 是少一個 m 的 Symetric）、多了 Two_Sided /
-     Tip_Strips / Rx_angle / Ry_angle（Ry_angle 取代 xflr5 的 Tilt_angle）
-   - 垂尾不再用 isFin 隱式旋轉，改為 Type=FIN + Rx_angle=-90 + Two_Sided=false
-   - <Section> 的所有標籤與 xflr5 完全相同，故剖面產生邏輯直接沿用
-   全案優點：flow5 的腳本模式支援整機分析（xflr5 只支援翼型），
-   所以之後可以由 Fusion 外掛直接驅動、免手動點四個步驟。            */
-function buildFlow5Xml(i,o,name){
-  const T=i.tailType||"cross";
-  const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
-  const sec=(y,chord,xoff,dihe,twist,foil)=>`
-     <Section>
-      <y_position>${M(y)}</y_position>
-      <Chord>${M(chord)}</Chord>
-      <xOffset>${M(xoff)}</xOffset>
-      <Dihedral>${dihe.toFixed(3)}</Dihedral>
-      <Twist>${twist.toFixed(3)}</Twist>
-      <x_number_of_panels>13</x_number_of_panels>
-      <x_panel_distribution>COSINE</x_panel_distribution>
-      <y_number_of_panels>19</y_number_of_panels>
-      <y_panel_distribution>UNIFORM</y_panel_distribution>
-      <Left_Side_FoilName>${E(foil)}</Left_Side_FoilName>
-      <Right_Side_FoilName>${E(foil)}</Right_Side_FoilName>
-     </Section>`;
-  // isFin 在 flow5 改用 Rx_angle=-90 立起來；Two_Sided=false 代表單面
-  const wing=(wname,type,pos,isFin,sections)=>`
-    <wing>
-     <Name>${E(wname)}</Name>
-     <Type>${type}</Type>
-     <Description></Description>
-     <Position>${pos.map(v=>(v/1000).toFixed(6)).join(", ")}</Position>
-     <Tip_Strips>1</Tip_Strips>
-     <Rx_angle>${isFin?"-90.000":"0.000"}</Rx_angle>
-     <Ry_angle>0.000</Ry_angle>
-     <symmetric>true</symmetric>
-     <Two_Sided>${isFin?"false":"true"}</Two_Sided>
-     <Inertia><Mass>0.000</Mass></Inertia>
-     <Sections>${sections}</Sections>
-    </wing>`;
-  const foil=i.foilData.name;
-  const mainSecs =
-    sec(0, i.chord, 0, i.dihedral, i.incidence, foil)+
-    sec(i.span/2, o.ct, 0.25*(i.chord-o.ct), 0, i.incidence-i.washout, foil);
-  let tailWings="";
-  if(T==="vee"){
-    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,0],false,
-      sec(0, i.veeCr, 0, i.veeAngle, 0, TAIL_FOIL.name)+
-      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, 0, TAIL_FOIL.name));
-  }else{
-    tailWings = wing("Elevator","ELEVATOR",[o.htailLeX,0,o.htailZ],false,
-      sec(0, o.chRoot, 0, 0, 0, TAIL_FOIL.name)+
-      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, 0, TAIL_FOIL.name));
-    // hh/box 以等效單垂尾近似：兩片各 Sv/2、同弦長，高度加倍即等面積
-    tailWings += wing("Fin","FIN",[o.finLeX,0,0],true,
-      sec(0, o.cvRoot, 0, 0, 0, TAIL_FOIL.name)+
-      sec(o.bv*1000*((T==="hh"||T==="box")?2:1), o.cvTip,
-          0.25*(o.cvRoot-o.cvTip), 0, 0, TAIL_FOIL.name));
-  }
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE flow5>
-<xflplane version="1.0">
- <Units>
-  <length_unit_to_meter>1</length_unit_to_meter>
-  <area_unit_to_m2>1</area_unit_to_m2>
-  <mass_unit_to_kg>1</mass_unit_to_kg>
-  <speed_unit_to_ms>1</speed_unit_to_ms>
-  <inertia_unit_to_kgm2>1</inertia_unit_to_kgm2>
- </Units>
- <Plane>
-  <Name>${E(name)}</Name>
-  <Description>由 NYCU UAV 填表精靈產生</Description>
-  <Inertia>
-   <Point_Mass>
-    <Tag>全機質量</Tag>
-    <Mass>${(i.mtow/1000).toFixed(4)}</Mass>
-    <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
-   </Point_Mass>
-  </Inertia>${wing("Main Wing","MAINWING",[0,0,0],false,mainSecs)}${tailWings}
  </Plane>
 </xflplane>
 `;
@@ -996,11 +860,13 @@ const FOILS_JSON_EDIT_URL =
 // 內容則會停在舊版——用 GITHUB_TOKEN 推的 commit 不會觸發 Pages 重建
 // （實測機器人上傳的翼型在 Pages 上永遠看不到）。最後才退回內建清單。
 const FOILS_SOURCES=[
-  // jsDelivr CDN：不限流、commit 後數分鐘內更新、有 CORS。首選。
+  // Vercel：每次 push（含機器人 commit）都自動重建、不限流、有 CORS。首選。
+  "https://uav-designsystem-web.vercel.app/foils.json",
+  // jsDelivr CDN：不限流、commit 後數分鐘內更新。
   "https://cdn.jsdelivr.net/gh/NYCU-UAV/UAV_designsystem_web@main/foils.json",
   // raw：即時但對未認證請求限流（實測整台機器被 429 擋掉），當後備。
   "https://raw.githubusercontent.com/NYCU-UAV/UAV_designsystem_web/main/foils.json",
-  // 同源（Pages）：對機器人的 commit 不會更新，敬陪末座。
+  // 同源（Pages 對機器人 commit 不更新；Vercel 同源則沒這問題）。
   "foils.json",
 ];
 (async()=>{
@@ -1009,9 +875,21 @@ const FOILS_SOURCES=[
       const r=await fetch(src,{cache:"no-store"});
       if(!r.ok) continue;
       const list=await r.json();
-      if(Array.isArray(list)&&list.length){ setFoilLibrary(list); render(); return; }
+      if(Array.isArray(list)&&list.length){ setFoilLibrary(list); render(); break; }
     }catch(e){ /* 換下一個來源 */ }
   }
+  // 社團自建庫（資料庫）：網頁上傳的翼型即時可用，不用等 GitHub
+  try{
+    const r=await fetch("/api/foils",{cache:"no-store"});
+    if(r.ok){
+      const j=await r.json();
+      if(j.ok && j.foils.length){
+        const have=new Set(LIB_FOILS.map(f=>f.name));
+        setFoilLibrary(LIB_FOILS.concat(j.foils.filter(f=>!have.has(f.name))));
+        render();
+      }
+    }
+  }catch(e){ /* 沒接資料庫或不在 Vercel 上，跳過 */ }
 })();
 
 function inputs(){
@@ -1100,6 +978,7 @@ function refreshLive(){
       rr.innerHTML = renderCharts(LAST_RESULT) + (stale
         ? `<div class="hint">⚠ 上面是<b>之前的結果</b>——幾何／速度／重心後來改過了，按「分析」重跑才是現在這台。</div>`
         : "");
+      initFlowPanel();
     }
   }
   const ph=$("#posHint");
@@ -1107,7 +986,7 @@ function refreshLive(){
     const o=compute(inputs());
     let t=`📐 主翼 MAC=<b>${o.mac.toFixed(0)}mm</b>，重心比例 ${state.xcg} → 重心在主翼前緣後 <b>${(state.xcg*o.mac).toFixed(0)}mm</b><br>📍 目前位置（主翼前緣=0）：平尾/V尾前緣 X≈<b>${o.htailLeX.toFixed(0)}mm</b>`;
     if(state.tailType!=="vee") t+=`、垂尾前緣 X≈<b>${o.finLeX.toFixed(0)}mm</b>`;
-    if(o.htailZ>0) t+=`、平尾高度 Z=${o.htailZ.toFixed(0)}mm（T尾）`;
+    if(Math.abs(o.htailZ)>0.01) t+=`、平尾/V尾高度 Z=${o.htailZ.toFixed(0)}mm${state.tailType==="tee"?"（T尾自動+自訂）":""}`;
     if(o.finY>0) t+=`、雙垂尾在 Y=±${o.finY.toFixed(0)}mm`;
     t+=`；機身總長估 ${o.totalLen.toFixed(0)}mm`;
     ph.innerHTML=t;
@@ -1408,6 +1287,8 @@ function rTail(){
     ${field("veeL","單片斜長（沿翼面量）","mm","","step=5")}
     ${field("veeCr","單片根弦長","mm","","step=1")}
     ${field("veeTaper","單片漸縮比","","","step=0.05")}
+    ${field("htailInc","V 尾裝置角","deg","相對機身；通常 0～-1°（要比主翼小 1~3°）","step=0.5")}
+    ${field("htailDz","V 尾高度（相對主翼平面）","mm","裝在尾管上通常 0；正=高於主翼","step=5")}
     </div>`;
   }else{
     const finLabel = (T==="hh"||T==="box") ? "垂尾面積比 Sv/S（兩片合計）" : "垂尾面積比 Sv/S";
@@ -1418,6 +1299,8 @@ function rTail(){
     ${field("svr",finLabel,"","0.06~0.12 常見","step=0.01")}
     ${field("arv","垂尾展弦比（單片）","","1~2","step=0.1")}
     ${field("tv","垂尾漸縮比","","","step=0.05")}
+    ${field("htailInc","平尾裝置角","deg","相對機身；通常 0～-1°（要比主翼小 1~3°）","step=0.5")}
+    ${field("htailDz","平尾高度（相對主翼平面）","mm","T尾會自動再墊到垂尾頂；正=高於主翼","step=5")}
     </div>`+
     (T==="tee"?`<div class="hint">⊤ 平尾會自動放在垂尾頂端（高度＝垂尾高）。</div>`:"")+
     ((T==="hh"||T==="box")?`<div class="hint">Ⓗ 兩片垂尾自動放在平尾兩端（±半平尾展），各分一半面積。</div>`:"")+
@@ -1429,7 +1312,7 @@ function rTail(){
   <div class="lead">先選構型（五種都能在 Fusion 自動生成），欄位會跟著換成該構型需要的。
   Vh/Vv 是「尾翼面積 × 力臂」的無因次值——同樣的穩定效果，尾巴拉長就可以做小一點。</div>
   ${cards}${fields}
-  <div data-live='["尾力臂","Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威"]'></div>
+  <div data-live='["尾力臂","Vh 水平尾容積","Vv 垂直尾容積","B 螺旋穩定","Vv·B 舵轉權威","裝置角差（主翼−尾翼）"]'></div>
   ${fixTable()}</div>`;
 }
 function rPower(){
@@ -1591,7 +1474,132 @@ function dl(text,fname,mime){
   a.download=fname; a.click(); URL.revokeObjectURL(a.href);
 }
 /* ---------- 一鍵分析：呼叫本機/社團的分析伺服器，畫出四張圖 ---------- */
-let LAST_RESULT = null;
+let LAST_RESULT = null, LAST_MODEL = null;
+
+/* ---------- 專案雲端存檔（Neon Postgres via /api/*）----------
+   每台飛機一個專案、每次存檔一個版本：翻歷史、載舊版、clone 改參數
+   做相似機，全社團共用。API 沒接資料庫時按鈕仍在，會顯示設定教學。 */
+let PROJ = { slug:null, name:null, ver:null };
+
+async function api(path, body){
+  const r = await fetch(path, body===undefined ? {} : {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(body)});
+  let j; try{ j = await r.json(); }catch(e){ j = {ok:false, error:"HTTP "+r.status}; }
+  if(!j.ok) throw new Error(j.hint || j.error || ("HTTP "+r.status));
+  return j;
+}
+
+function designState(){
+  const st = {...state};
+  delete st.step; delete st.customFoils;    // 流程位置/暫存翼型不屬於設計
+  return st;
+}
+
+function renderProjBar(){
+  const pb = $("#projBar");
+  if(!pb) return;
+  pb.innerHTML = PROJ.slug
+    ? `📁 專案：<b>${PROJ.name}</b>（v${PROJ.ver}）
+       <button class="btn" onclick="projSave()">💾 另存新版本</button>
+       <button class="btn" onclick="projPanelToggle()">☁ 專案庫</button>`
+    : `📁 未連結專案（設計只存在這個分頁裡）
+       <button class="btn" onclick="projPanelToggle()">☁ 建立 / 開啟專案</button>`;
+}
+
+let _panelOpen = false;
+async function projPanelToggle(force){
+  const pn = $("#projPanel");
+  _panelOpen = force!==undefined ? force : !_panelOpen;
+  if(!_panelOpen){ pn.classList.add("hidden"); return; }
+  pn.classList.remove("hidden");
+  pn.innerHTML = `<span class="spin"></span> 讀取專案庫…`;
+  try{
+    const j = await api("/api/projects");
+    const rows = j.projects.map(p=>`
+      <tr><td><b>${p.name}</b></td><td>${p.owner||"—"}</td>
+      <td>v${p.latest||0}（${p.n_versions} 版）</td>
+      <td>${p.updated_at? new Date(p.updated_at).toLocaleDateString():"—"}</td>
+      <td><button class="btn" onclick="projShow('${p.slug}')">開啟</button></td></tr>`).join("");
+    pn.innerHTML = `<h3>☁ 專案庫</h3>
+      <div style="margin-bottom:.6rem">
+        <input type="text" id="npName" placeholder="專案名稱（例：2026 新生練習機）" style="width:16rem">
+        <input type="text" id="npOwner" placeholder="負責人" style="width:8rem">
+        <button class="btn primary" onclick="projCreate()">➕ 創立專案（存目前設計為 v1）</button>
+      </div>
+      ${j.projects.length? `<table><tr><th>專案</th><th>負責人</th><th>版本</th><th>更新</th><th></th></tr>${rows}</table>`
+        : `<div class="hint">還沒有任何專案——上面輸入名稱與負責人，把目前的設計存成第一個。</div>`}
+      <div id="projDetail"></div>`;
+  }catch(e){
+    pn.innerHTML = `<h3>☁ 專案庫</h3><div class="hint">⚠ ${String(e.message||e)}</div>`;
+  }
+}
+
+async function projCreate(baseState){
+  const name = $("#npName").value.trim(), owner = $("#npOwner").value.trim();
+  if(!name){ alert("專案名稱必填"); return; }
+  try{
+    const j = await api("/api/projects", {name, owner, state: baseState||designState(),
+      note: baseState? "clone 起始版" : "初版"});
+    PROJ = {slug: j.project.slug, name: j.project.name, ver: 1};
+    renderProjBar(); projPanelToggle(false);
+  }catch(e){ alert("建立失敗："+(e.message||e)); }
+}
+
+async function projShow(slug){
+  const box = $("#projDetail");
+  box.innerHTML = `<span class="spin"></span>`;
+  try{
+    const j = await api("/api/project?slug="+encodeURIComponent(slug));
+    const rows = j.versions.map(v=>`
+      <tr><td>v${v.num}</td><td>${v.author||"—"}</td><td>${v.note||""}</td>
+      <td>${v.mtow||"?"}g / ${v.span||"?"}mm / ${v.foil||"?"} / ${v.tail||"?"}</td>
+      <td>${new Date(v.created_at).toLocaleString()}</td>
+      <td><button class="btn" onclick="projLoad('${slug}',${v.num})">載入</button>
+          <button class="btn" onclick="projClone('${slug}',${v.num})">clone 成新專案</button></td></tr>`).join("");
+    box.innerHTML = `<h3 style="margin-top:.7rem">📂 ${j.project.name}
+      <small style="color:var(--ink2)">負責人 ${j.project.owner||"—"}</small></h3>
+      <table><tr><th>版本</th><th>作者</th><th>說明</th><th>摘要</th><th>時間</th><th></th></tr>${rows}</table>`;
+  }catch(e){ box.innerHTML = `<div class="hint">⚠ ${String(e.message||e)}</div>`; }
+}
+
+async function projLoad(slug, num){
+  try{
+    const j = await api(`/api/project?slug=${encodeURIComponent(slug)}&v=${num}`);
+    Object.assign(state, j.version.state);
+    ensureVeeDefaults();
+    PROJ = {slug, name: j.project.name, ver: num};
+    projPanelToggle(false); render(); renderProjBar();
+  }catch(e){ alert("載入失敗："+(e.message||e)); }
+}
+
+async function projClone(slug, num){
+  try{
+    const j = await api(`/api/project?slug=${encodeURIComponent(slug)}&v=${num}`);
+    Object.assign(state, j.version.state);      // 先把參數載進精靈
+    ensureVeeDefaults(); render();
+    const name = prompt("新專案名稱（以「"+j.project.name+" v"+num+"」為底）",
+      j.project.name+"-改");
+    if(!name) return;
+    const owner = prompt("負責人", "") || "";
+    const jj = await api("/api/projects", {name, owner, state: designState(),
+      note: `clone 自 ${j.project.name} v${num}`});
+    PROJ = {slug: jj.project.slug, name: jj.project.name, ver: 1};
+    projPanelToggle(false); renderProjBar();
+  }catch(e){ alert("clone 失敗："+(e.message||e)); }
+}
+
+async function projSave(){
+  if(!PROJ.slug) return projPanelToggle(true);
+  const note = prompt("這一版改了什麼？（會顯示在歷史清單）", "") || "";
+  const author = prompt("你的名字", "") || "";
+  try{
+    const j = await api("/api/project?slug="+encodeURIComponent(PROJ.slug),
+      {state: designState(), note, author});
+    PROJ.ver = j.version.num;
+    renderProjBar();
+  }catch(e){ alert("存檔失敗："+(e.message||e)); }
+}
 
 /* 網頁本體永遠是同一份（GitHub Pages）；「分析服務」則是另外一支可有可無的
    小程式。這裡負責把它找出來，找不到就只是少了分析按鈕，其餘功能照常。
@@ -1647,12 +1655,15 @@ function chartSvg(pts, xk, yk, opts){
   const px = v => P + (v - x0) / ((x1 - x0) || 1) * (W - P - 8);
   const py = v => H - P + 6 - (v - y0) / ((y1 - y0) || 1) * (H - P - 14);
   const d = pts.map((p,i)=>(i?"L":"M")+px(p[xk]).toFixed(1)+" "+py(p[yk]).toFixed(1)).join(" ");
-  // 零線（若 0 落在範圍內）
   const zx = (x0 < 0 && x1 > 0) ? `<line x1="${px(0)}" y1="${py(y0)}" x2="${px(0)}" y2="${py(y1)}" stroke="#c9bb9a" stroke-dasharray="3 3"/>` : "";
   const zy = (y0 < 0 && y1 > 0) ? `<line x1="${px(x0)}" y1="${py(0)}" x2="${px(x1)}" y2="${py(0)}" stroke="#c9bb9a" stroke-dasharray="3 3"/>` : "";
   const mark = (o.markX !== undefined && o.markX !== null && o.markX >= x0 && o.markX <= x1)
     ? `<line x1="${px(o.markX)}" y1="${py(y0)}" x2="${px(o.markX)}" y2="${py(y1)}" stroke="#b65c2e" stroke-width="1.5"/>` : "";
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label||''}">
+  // 滑鼠十字游標要用的資料全塞進屬性：座標點 + 兩軸名稱 + 繪圖區映射
+  const data = JSON.stringify(pts.map(p=>[+p[xk].toFixed(4), +p[yk].toFixed(5)]));
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label||''}"
+    data-pts='${data}' data-xn="${o.xlab||xk}" data-yn="${yk}"
+    data-map="${P},${x0},${x1},${y0},${y1}">
     <rect x="${P}" y="6" width="${W-P-8}" height="${H-P-8}" fill="#fffdf6" stroke="#d8c9a5"/>
     ${zx}${zy}${mark}
     <path d="${d}" fill="none" stroke="#3a5a78" stroke-width="1.8"/>
@@ -1661,8 +1672,55 @@ function chartSvg(pts, xk, yk, opts){
     <text x="4" y="14" font-size="9" fill="#6b6353">${y1.toFixed(2)}</text>
     <text x="4" y="${H-P+4}" font-size="9" fill="#6b6353">${y0.toFixed(2)}</text>
     <text x="${W/2}" y="${H-8}" font-size="9" fill="#6b6353" text-anchor="middle">${o.xlab||''}</text>
+    <g class="hoverui" style="display:none;pointer-events:none">
+      <line class="hx" stroke="#b65c2e" stroke-width="0.8" stroke-dasharray="2 2"/>
+      <line class="hy" stroke="#b65c2e" stroke-width="0.8" stroke-dasharray="2 2"/>
+      <circle class="hc" r="3" fill="#b65c2e"/>
+      <rect class="hb" fill="#fff8e8" stroke="#b65c2e" stroke-width="0.6" rx="3"/>
+      <text class="ht" font-size="10" fill="#4a3d2a" font-weight="bold"></text>
+    </g>
   </svg>`;
 }
+
+/* 十字游標：滑鼠移到圖上就吸附到最近的資料點，顯示精確 (x, y)。
+   事件掛在 document 上做委派——圖是 innerHTML 生的，個別掛會漏。 */
+(function(){
+  function onMove(e){
+    const svg = e.target.closest ? e.target.closest("svg[data-pts]") : null;
+    document.querySelectorAll("svg[data-pts]").forEach(o=>{
+      if(o!==svg) o.querySelector(".hoverui").style.display="none";
+    });
+    if(!svg) return;
+    const pts = JSON.parse(svg.dataset.pts);
+    const [P,x0,x1,y0,y1] = svg.dataset.map.split(",").map(Number);
+    const W=260, H=170;
+    const rect = svg.getBoundingClientRect();
+    const mx = (e.clientX-rect.left)/rect.width*W;
+    // 反算資料 x → 找最近點
+    const dataX = x0 + (mx-P)/((W-P-8)||1)*(x1-x0);
+    let bi=0, bd=Infinity;
+    pts.forEach((p,i)=>{const d=Math.abs(p[0]-dataX); if(d<bd){bd=d;bi=i;}});
+    const [dx,dy] = pts[bi];
+    const px = P + (dx-x0)/((x1-x0)||1)*(W-P-8);
+    const py = H-34+6 - (dy-y0)/((y1-y0)||1)*(H-34-14);
+    const ui = svg.querySelector(".hoverui");
+    ui.style.display="";
+    const hx=ui.querySelector(".hx"), hy=ui.querySelector(".hy");
+    hx.setAttribute("x1",px);hx.setAttribute("x2",px);hx.setAttribute("y1",6);hx.setAttribute("y2",H-28);
+    hy.setAttribute("x1",P);hy.setAttribute("x2",W-8);hy.setAttribute("y1",py);hy.setAttribute("y2",py);
+    const c=ui.querySelector(".hc");c.setAttribute("cx",px);c.setAttribute("cy",py);
+    const t=ui.querySelector(".ht");
+    t.textContent = `${svg.dataset.xn}=${dx}  ${svg.dataset.yn}=${dy}`;
+    const tw = t.textContent.length*5.4+10;
+    let tx = px+8; if(tx+tw>W-8) tx = px-8-tw;
+    let ty = py-10; if(ty<16) ty = py+18;
+    t.setAttribute("x",tx+5); t.setAttribute("y",ty+3);
+    const b=ui.querySelector(".hb");
+    b.setAttribute("x",tx);b.setAttribute("y",ty-9);b.setAttribute("width",tw);b.setAttribute("height",15);
+  }
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerdown", onMove);   // 手機點一下也能讀值
+})();
 
 function renderCharts(res){
   const v = res.verdict, p = res.points;
@@ -1698,8 +1756,55 @@ function renderCharts(res){
       `　<button class="btn" style="font-size:.8rem;padding:.1rem .6rem"
         onclick="applyXnp(${s.xnp_m})">↩ 填回上面的 XNP 欄位</button></div>`
     : "";
+  const flow = (s.method||"").startsWith("VLM-JS") ? `
+    <div class="chart flowbox"><h4>🌬 流場切面（對稱面 y=0）——由上面同一組渦格解直接積分，不是示意圖</h4>
+      <svg id="flowSvg" viewBox="0 0 640 300"></svg>
+      <div class="cv" style="margin-top:.35rem">攻角 α
+        <input type="range" id="flowA" min="-5" max="15" step="1" value="2"
+          oninput="drawFlow(+this.value)">
+        <span id="flowInfo"></span>
+        <div style="margin-top:.2rem">翼前流線被抬起（上洗）、翼後被壓下（下洗）、尾翼泡在下洗流裡——
+        拖滑桿看攻角怎麼改變整個流場。</div></div>
+    </div>` : "";
   return `<div class="charts">${cards.map(c=>
-    `<div class="chart"><h4>${c.t}</h4>${c.svg}<div class="cv">${c.v}</div></div>`).join("")}</div>${xnp}`;
+    `<div class="chart"><h4>${c.t}</h4>${c.svg}<div class="cv">${c.v}</div></div>`).join("")}</div>${flow}${xnp}`;
+}
+
+/* ---------- 流場動畫：streamlines() 積分真實速度場，SVG 虛線位移做流動感 ---------- */
+function drawFlow(alpha){
+  const svg = $("#flowSvg");
+  if(!svg || !LAST_MODEL) return;
+  const key = String(alpha);
+  if(!LAST_MODEL.cache[key])
+    LAST_MODEL.cache[key] = VLM.streamlines(LAST_MODEL.model, alpha);
+  const fl = LAST_MODEL.cache[key];
+  const b = fl.box, W = 640, H = 300;
+  const kx = W/(b.x1-b.x0), kz = H/(b.z1-b.z0), k = Math.min(kx,kz);
+  const X = x=>(x-b.x0)*k + (W-(b.x1-b.x0)*k)/2;
+  const Z = z=>H-((z-b.z0)*k + (H-(b.z1-b.z0)*k)/2);
+  let out = "";
+  fl.lines.forEach((l,idx)=>{
+    const d = l.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Z(p[1]).toFixed(1)).join(" ");
+    out += `<path class="flowline" style="animation-delay:-${(idx%5)*0.11}s" d="${d}"/>`;
+  });
+  LAST_MODEL.model.profile.forEach(pr=>{
+    const d = pr.pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Z(p[1]).toFixed(1)).join(" ");
+    out += pr.fin
+      ? `<path class="flowbody" style="fill:none" d="${d}"/>`
+      : `<path class="flowbody" style="fill:none;stroke-width:3" d="${d}"/>`;
+  });
+  svg.innerHTML = out;
+  const pt = fl.point;
+  $("#flowInfo").innerHTML =
+    ` <b>α=${alpha}°</b>　CL=${pt.CL.toFixed(3)}　Cm=${pt.Cm.toFixed(4)}　L/D=${pt.CLCD.toFixed(1)}`;
+  const fa = $("#flowA"); if(fa && +fa.value!==alpha) fa.value = alpha;
+}
+
+function initFlowPanel(){
+  if(!$("#flowSvg") || !LAST_MODEL || !LAST_RESULT) return;
+  if(LAST_MODEL.fp !== LAST_RESULT.fp) { $("#flowSvg").closest(".flowbox").style.display="none"; return; }
+  const t = LAST_RESULT.verdict && LAST_RESULT.verdict.trim_alpha;
+  drawFlow(t===null||t===undefined ? 2 : Math.max(-5, Math.min(15, Math.round(t))));
 }
 
 function applyXnp(xnpMeters){
@@ -1720,6 +1825,8 @@ function analysisFingerprint(){
 async function fetchFoilDat(dat){
   const tries=[
     "airfoils/"+dat,                                                        // 同源
+    "https://uav-designsystem-web.vercel.app/airfoils/"+dat,               // Vercel 靜態
+    "/api/foils?dat="+encodeURIComponent(dat),                              // 社團自建庫（DB）
     "https://cdn.jsdelivr.net/gh/NYCU-UAV/UAV_designsystem_web@main/airfoils/"+dat,
     "https://raw.githubusercontent.com/NYCU-UAV/UAV_designsystem_web/main/airfoils/"+dat,
   ];
@@ -1741,17 +1848,20 @@ async function doAnalyze(){
       const txt = await fetchFoilDat(i.foilData.dat);
       if(txt) foils[i.foilData.name] = txt;
     }
-    const res = VLM.solve({
+    const model = VLM.buildModel({
       geom: buildPlaneGeom(i, o), foils: foils,
-      velocity: i.v, xcgM: i.xcg * o.mac / 1000,
-      alphaMin: -20, alphaMax: 20, alphaStep: 0.5, viscous: true,
+      velocity: i.v, xcgM: i.xcg * o.mac / 1000, viscous: true,
     });
+    const res = VLM.solve({ model: model,
+      alphaMin: -20, alphaMax: 20, alphaStep: 0.5, viscous: true });
     LAST_RESULT = res; LAST_RESULT.fp = analysisFingerprint();
+    LAST_MODEL = { model: model, fp: LAST_RESULT.fp, cache: {} };
     let warn = "";
     if(res.summary.missing_foils.length)
       warn = `<div class="hint">⚠ 抓不到翼型檔 <code>${res.summary.missing_foils.join("、")}</code>，
         先用平板中弧線近似——升力斜率對、但 α=0 的 CL 會偏低。</div>`;
     box.innerHTML = renderCharts(res) + warn;
+    initFlowPanel();
   }catch(e){
     box.innerHTML = `<div class="chart" style="border-color:var(--bad)">
       <b style="color:var(--bad)">分析失敗</b><div class="cv">${String(e.message||e)}</div></div>`;
@@ -1842,6 +1952,7 @@ ensureVeeDefaults();
 render();
 // 開頁後在背景找分析服務，找到就把「分析」按鈕點亮（找不到不影響任何其他功能）
 findServer().then(()=>refreshLive());
+renderProjBar();
 </script>
 </body>
 </html>
