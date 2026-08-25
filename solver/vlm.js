@@ -112,6 +112,7 @@
     }
     return {
       tc: tcMax,
+      outline: seligPts,                       // 正規化外形（畫切面/擋流線用）
       z: zAt,                                  // 中弧線高度 z_c(x)
       slope: function (x) {                    // dz_c/dx（中央差分）
         var j = 0;
@@ -126,8 +127,24 @@
   function naca4Camber(code) {
     var m = parseInt(code[0], 10) / 100, p = parseInt(code[1], 10) / 10;
     var tt = parseInt(code.slice(2), 10) / 100;
+    function zc(x) {
+      if (m === 0 || p === 0) return 0;
+      if (x < p) return m / (p * p) * (2 * p * x - x * x);
+      return m / ((1 - p) * (1 - p)) * ((1 - 2 * p) + 2 * p * x - x * x);
+    }
+    function half(x) {
+      return 5 * tt * (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x
+                       + 0.2843 * x * x * x - 0.1036 * x * x * x * x);
+    }
+    var up = [], lo = [];
+    for (var i = 0; i <= 25; i++) {
+      var x = 0.5 * (1 - Math.cos(Math.PI * i / 25));
+      up.push([x, zc(x) + half(x)]); lo.push([x, zc(x) - half(x)]);
+    }
+    var outline = up.slice().reverse().concat(lo);
     return {
       tc: tt,
+      outline: outline,
       z: function (x) {
         if (m === 0 || p === 0) return 0;
         if (x < p) return m / (p * p) * (2 * p * x - x * x);
@@ -142,6 +159,7 @@
   }
 
   var FLAT = { tc: 0.10, z: function () { return 0; },
+             outline: [[1, 0.005], [0.5, 0.05], [0, 0.01], [0, -0.01], [0.5, -0.05], [1, -0.005]],
              slope: function () { return 0; } };
 
   /* =====================================================================
@@ -432,14 +450,16 @@
         var xT = x0 + sTip.xOffset * 0.001;
         pts = [[x0, z0], [x0 + c, z0], [xT + cT, z0 + h], [xT, z0 + h], [x0, z0]];
       } else {
-        for (var k = 0; k <= 24; k++) {
-          var f = k / 24;
-          var xr = f * Math.cos(tw) + foil.z(f) * Math.sin(tw);
-          var zr = -f * Math.sin(tw) + foil.z(f) * Math.cos(tw);
+        // 真翼型外形（含厚度）：畫在切面上、也拿來擋流線
+        (foil.outline || []).forEach(function (q) {
+          var xr = q[0] * Math.cos(tw) + q[1] * Math.sin(tw);
+          var zr = -q[0] * Math.sin(tw) + q[1] * Math.cos(tw);
           pts.push([x0 + xr * c, z0 + zr * c]);
-        }
+        });
+        if (pts.length) pts.push(pts[0]);      // 閉合
       }
-      profile.push({ name: w.name, fin: w.type === "FIN", pts: pts });
+      profile.push({ name: w.name, fin: w.type === "FIN",
+                     solid: w.type !== "FIN", pts: pts });
     });
 
     return { P: P, N: N, strips: mesh.strips, lu: lu, Wx: Wx, Wy: Wy, Wz: Wz,
@@ -511,17 +531,38 @@
     var x0 = xmin - 0.35 * L, x1 = xmax + 0.4 * L;
     var zLo = zmin - 0.3 * L, zHi = zmax + 0.35 * L;
     var ds = L / (o.stepsPerChord || 110);
+    // 切面稍微偏離 y=0：最內側面元邊緣的尾渦絲正好落在 y=0 平面上，
+    // 貼著奇異線積分會出現亂跳的假流線。
+    var ySlice = 0.004 * Math.max(M.ref.b, 0.3);
+    // 固體多邊形（射線法）：機翼是薄面、控制點外不保證不穿透，
+    // 流線打進外形就代表撞上駐點，截止在該處。
+    var solids = M.profile.filter(function (pr) { return pr.solid; });
+    function inside(x, z) {
+      for (var si = 0; si < solids.length; si++) {
+        var pg = solids[si].pts, hit = false;
+        for (var a = 0, b = pg.length - 1; a < pg.length; b = a++) {
+          if ((pg[a][1] > z) !== (pg[b][1] > z) &&
+              x < (pg[b][0] - pg[a][0]) * (z - pg[a][1]) / (pg[b][1] - pg[a][1]) + pg[a][0])
+            hit = !hit;
+        }
+        if (hit) return true;
+      }
+      return false;
+    }
     var lines = [];
     for (var s = 0; s < nL; s++) {
       var z = zLo + (zHi - zLo) * s / (nL - 1);
-      var p = [x0, 0, z], line = [[p[0], p[2]]];
+      var p = [x0, ySlice, z], line = [[p[0], p[2]]];
       for (var st = 0; st < 500 && p[0] < x1; st++) {
         var v1 = velocityAt(M, G, Vinf, p);
+        v1[1] = 0;                             // 投影回切面（切面流線的標準做法）
         var sp1 = norm(v1); if (sp1 < 1e-6) break;
         var mid = add(p, mul(v1, ds / sp1 * 0.5));
         var v2 = velocityAt(M, G, Vinf, mid);
+        v2[1] = 0;
         var sp2 = norm(v2); if (sp2 < 1e-6) break;
         p = add(p, mul(v2, ds / sp2));
+        if (inside(p[0], p[2])) break;         // 撞上翼面＝駐點，截止
         line.push([p[0], p[2]]);
       }
       lines.push(line);

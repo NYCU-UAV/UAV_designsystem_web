@@ -64,6 +64,11 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .lz-cg text{fill:#b3382e;font-weight:700;font-size:15px;text-anchor:middle}
 .lz-np{fill:#3a6ea5}
 .lz-npt{fill:#3a6ea5;font-weight:700}
+#layoutViz{cursor:zoom-in}
+.lzoom{position:fixed;inset:0;background:rgba(40,35,25,.82);z-index:99;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:1.2rem;cursor:zoom-out}
+.lzoom svg.lz{width:min(96vw,1500px);height:auto;max-height:88vh;margin:0}
 /* 卡片 */
 .card{
   background:var(--card);border:2px solid var(--ink);border-radius:.6rem;
@@ -1318,6 +1323,17 @@ function delFoil(name){
 }
 /* STEP 5 佈局俯視圖：mm 座標直接畫進 viewBox（SVG 保持等比例），
    跟著欄位即時重畫。x 往右＝機尾方向、y＝翼展方向。 */
+function zoomLayout(){
+  const i=inputs(), o=compute(i);
+  const ov=document.createElement("div");
+  ov.className="lzoom";
+  ov.innerHTML=`<div class="hint" style="color:#f4efe2;text-align:center;margin-bottom:.4rem">點任意處或按 Esc 關閉</div>`+layoutSvg(i,o);
+  ov.onclick=()=>ov.remove();
+  const esc=e=>{ if(e.key==="Escape"){ ov.remove(); document.removeEventListener("keydown",esc); } };
+  document.addEventListener("keydown",esc);
+  document.body.appendChild(ov);
+}
+
 function layoutSvg(i,o){
   const T=i.tailType||"cross";
   const xN=-o.noseLE, xT=xN+o.totalLen;              // 機頭 / 機尾 x（mm）
@@ -1369,7 +1385,7 @@ function rLayout(){
   ${field("xcg","重心位置（MAC 比例）","","0.30~0.35 起手；調到 SM 綠燈為止。做出來後用手指頂翼下實測！","step=0.005")}
   </div>
   <div data-live='["靜穩定裕度 SM"]'></div>
-  <div id="layoutViz"></div>
+  <div id="layoutViz" onclick="zoomLayout()" title="點一下放大"></div>
   <div class="hint" id="posHint"></div>
   <div class="grid2">
   ${field("htailX","平尾/V尾前緣位置（0＝自動）","mm","自動＝由上面的尾距換算；填非 0 值可手動指定")}
@@ -1878,7 +1894,7 @@ function renderCharts(res){
         <input type="range" id="flowA" min="-5" max="15" step="1" value="2"
           oninput="drawFlow(+this.value)">
         <span id="flowInfo"></span>
-        <div style="margin-top:.2rem">翼前流線被抬起（上洗）、翼後被壓下（下洗）、尾翼泡在下洗流裡——
+        <div style="margin-top:.2rem">翼前上洗、翼後下洗、尾翼泡在下洗流裡；打在翼面上的流線截止於駐點——
         拖滑桿看攻角怎麼改變整個流場。</div></div>
     </div>` : "";
   return `<div class="charts">${cards.map(c=>
@@ -1903,10 +1919,11 @@ function drawFlow(alpha){
     out += `<path class="flowline" style="animation-delay:-${(idx%5)*0.11}s" d="${d}"/>`;
   });
   LAST_MODEL.model.profile.forEach(pr=>{
-    const d = pr.pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Z(p[1]).toFixed(1)).join(" ");
-    out += pr.fin
-      ? `<path class="flowbody" style="fill:none" d="${d}"/>`
-      : `<path class="flowbody" style="fill:none;stroke-width:3" d="${d}"/>`;
+    const d = pr.pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Z(p[1]).toFixed(1)).join(" ")
+      + (pr.solid?" Z":"");
+    out += pr.solid
+      ? `<path class="flowbody" d="${d}"/>`                     // 真翼型剖面（實心）
+      : `<path class="flowbody" style="fill:none" d="${d}"/>`;  // 垂尾側影（僅輪廓）
   });
   svg.innerHTML = out;
   const pt = fl.point;
