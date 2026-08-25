@@ -35,8 +35,21 @@ module.exports = async (req, res) => {
     if (req.method === "POST") {
       if (!writeAllowed(req)) { sendJson(res, 403, { ok: false, error: "bad_key" }); return; }
       const b = await readBody(req);
+      // 只給 airfoiltools 網址、沒給座標時：伺服器端代抓（瀏覽器抓不了
+      // ——airfoiltools 無 HTTPS 也無 CORS；serverless 這端沒這些限制）
+      if (!b.dat_text && b.url) {
+        const m = /[?&]airfoil=([\w-]+)/.exec(b.url);
+        if (m) {
+          try {
+            const r = await fetch(
+              "http://airfoiltools.com/airfoil/seligdatfile?airfoil=" + m[1],
+              { signal: AbortSignal.timeout(8000) });
+            if (r.ok) b.dat_text = await r.text();
+          } catch (e) { /* 抓不到就走下面的必填檢查回報 */ }
+        }
+      }
       if (!b.name || !b.dat_name || !b.dat_text) {
-        sendJson(res, 400, { ok: false, error: "name/dat_name/dat_text 必填" }); return;
+        sendJson(res, 400, { ok: false, error: "缺座標：請選 .dat 檔，或確認 airfoiltools 網址正確" }); return;
       }
       // 基本健檢：至少 20 列「兩個浮點數」才像座標檔（跟 WingForge 同標準）
       const nPts = (b.dat_text.match(/^\s*-?[\d.]+\s+-?[\d.]+\s*$/gm) || []).length;
