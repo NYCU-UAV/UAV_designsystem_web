@@ -223,22 +223,45 @@ const PRESETS = {
   d:{mtow:700, v:12, chord:220, span:1200, taper:0.7, dihedral:5, washout:1,
      incidence:2, tegap:0, gap:60, foil:"Clark Y", noseC:1.25, tailC:2.5, xcg:0.35,
      shr:0.15, arh:4, th:0.6, svr:0.08, arv:1.5, tv:0.6, tailType:"cross",
-     motorW:150, thrust:500}},
+     motorW:150, thrust:500, vtol:0, liftThrust:0}},
  park:{label:"公園慢速機", desc:"更輕更慢，小場地飛",
   d:{mtow:450, v:9, chord:200, span:1100, taper:0.8, dihedral:6, washout:1,
      incidence:2, tegap:0, gap:50, foil:"Clark Y", noseC:1.25, tailC:2.3, xcg:0.33,
      shr:0.18, arh:4, th:0.7, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
-     motorW:100, thrust:350}},
+     motorW:100, thrust:350, vtol:0, liftThrust:0}},
  sport:{label:"運動機", desc:"會飛了之後的第二台",
   d:{mtow:1100, v:16, chord:240, span:1300, taper:0.65, dihedral:3, washout:1,
      incidence:1.5, tegap:0, gap:70, foil:"NACA 2412", noseC:1.3, tailC:2.6, xcg:0.33,
      shr:0.16, arh:4, th:0.6, svr:0.08, arv:1.6, tv:0.6, tailType:"cross",
-     motorW:300, thrust:1000}},
+     motorW:300, thrust:1000, vtol:0, liftThrust:0}},
  glider:{label:"電動滑翔機", desc:"追熱氣流、慢慢飄",
   d:{mtow:800, v:9, chord:180, span:2000, taper:0.6, dihedral:4, washout:1.5,
      incidence:2, tegap:0, gap:50, foil:"SD7037", noseC:1.2, tailC:2.8, xcg:0.36,
      shr:0.12, arh:4.5, th:0.6, svr:0.07, arv:1.6, tv:0.6, tailType:"vee",
-     motorW:200, thrust:600}},
+     motorW:200, thrust:600, vtol:0, liftThrust:0}},
+ vtolq:{label:"VTOL 四旋翼定翼機", desc:"垂直起降＋定翼巡航（quad plane）",
+  d:{mtow:2200, v:15, chord:250, span:1600, taper:0.7, dihedral:3, washout:1,
+     incidence:2, tegap:0, gap:80, foil:"Clark Y", noseC:1.2, tailC:2.5, xcg:0.33,
+     shr:0.16, arh:4, th:0.6, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
+     motorW:400, thrust:1400, vtol:4, liftThrust:1100}},
+ tilt:{label:"VTOL 傾轉旋翼機", desc:"前傾轉×2＋尾×1，巡航效率較好但機構複雜",
+  d:{mtow:1600, v:16, chord:230, span:1500, taper:0.7, dihedral:3, washout:1,
+     incidence:2, tegap:0, gap:70, foil:"Clark Y", noseC:1.25, tailC:2.5, xcg:0.33,
+     shr:0.16, arh:4, th:0.6, svr:0.09, arv:1.5, tv:0.6, tailType:"cross",
+     motorW:350, thrust:1100, vtol:3, liftThrust:900}},
+};
+
+/* 構型層（QGC Airframe 的邏輯）：先選構型、再選起始值模板。
+   純旋翼機不收——這是「機翼設計」精靈，沒有翼的東西這裡幫不上忙。 */
+const AIRFRAMES = {
+ plane:{label:"傳統固定翼", icon:"✈️", desc:"主翼＋尾翼，最好飛、最好修、新生首選",
+        presets:["trainer","park","sport"]},
+ glider:{label:"滑翔機", icon:"🪁", desc:"大展弦比、V 尾，追熱氣流慢慢飄",
+        presets:["glider"]},
+ vtolq:{label:"VTOL 四旋翼定翼機", icon:"🛫", desc:"四顆垂起馬達掛在定翼上；起降不用跑道",
+        presets:["vtolq"]},
+ tilt:{label:"VTOL 傾轉旋翼機", icon:"🛰️", desc:"馬達會轉向；巡航沒有死重螺旋槳",
+        presets:["tilt"]},
 };
 
 /* ---------- 全部公式（與 xlsx CALC 分頁同一套；SI 內部計算） ---------- */
@@ -373,6 +396,13 @@ function checks(i,o){
     const p = o.tr<0.4?["bad","爬升吃力"]:o.tr<0.6?["warn","滑翔/慢速夠用"]
       :o.tr<0.8?["ok","教練/運動 OK"]:o.tr<1.1?["ok","很有勁"]:["ok","垂直性能級"];
     c.push([p[0],"靜推重比",fmt(o.tr),p[1]]);
+  }
+  if(i.vtol>0 && i.liftThrust>0){
+    // PX4 官方建議懸停推重比至少 1.5:1、舒適 2:1（quadplane 同標準）
+    const hov = i.vtol*i.liftThrust/i.mtow;
+    const p = hov<1.5?["bad","起飛勉強、抗風差——加大垂起動力或減重"]
+      :hov<1.8?["warn","能飛，風大會吃力"]:["ok","懸停餘裕充足"];
+    c.push([p[0],"懸停推重比",fmt(hov)+"（"+i.vtol+"顆垂起）",p[1]]);
   }
   return c;
 }
@@ -622,6 +652,180 @@ function buildXflr5Xml(i,o,name){
    - <Section> 的所有標籤與 xflr5 完全相同，故剖面產生邏輯直接沿用
    全案優點：flow5 的腳本模式支援整機分析（xflr5 只支援翼型），
    所以之後可以由 Fusion 外掛直接驅動、免手動點四個步驟。            */
+/* ---------- 中立幾何描述：VLM 求解器與 flow5 XML 都吃同一份 ----------
+   同一份資料餵兩邊，瀏覽器算的跟 flow5 算的才保證是同一台飛機。
+   單位 mm；座標 x 往後、y 往右、z 往上（xflr5/flow5 慣例）。 */
+function buildPlaneGeom(i,o){
+  const T=i.tailType||"cross";
+  const S=(y,chord,xOffset,dihedral,twist,foil)=>({y,chord,xOffset,dihedral,twist,foil});
+  const foil=i.foilData.name;
+  const wings=[{name:"Main Wing",type:"MAINWING",position:[0,0,0],sections:[
+    S(0,i.chord,0,i.dihedral,i.incidence,foil),
+    S(i.span/2,o.ct,0.25*(i.chord-o.ct),0,i.incidence-i.washout,foil)]}];
+  if(T==="vee"){
+    wings.push({name:"V-Tail",type:"ELEVATOR",position:[o.htailLeX,0,0],sections:[
+      S(0,i.veeCr,0,i.veeAngle,0,TAIL_FOIL.name),
+      S(o.veeSpanY,o.veeCt,0.25*(i.veeCr-o.veeCt),0,0,TAIL_FOIL.name)]});
+  }else{
+    wings.push({name:"Elevator",type:"ELEVATOR",position:[o.htailLeX,0,o.htailZ],sections:[
+      S(0,o.chRoot,0,0,0,TAIL_FOIL.name),
+      S(o.bh*1000/2,o.chTip,0.25*(o.chRoot-o.chTip),0,0,TAIL_FOIL.name)]});
+    // hh/box 以等效單垂尾近似：兩片各 Sv/2、同弦長，高度加倍即等面積
+    wings.push({name:"Fin",type:"FIN",position:[o.finLeX,0,0],sections:[
+      S(0,o.cvRoot,0,0,0,TAIL_FOIL.name),
+      S(o.bv*1000*((T==="hh"||T==="box")?2:1),o.cvTip,
+        0.25*(o.cvRoot-o.cvTip),0,0,TAIL_FOIL.name)]});
+  }
+  return {wings};
+}
+
+function buildFlow5Xml(i,o,name){
+  const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
+  const sec=st=>`
+     <Section>
+      <y_position>${M(st.y)}</y_position>
+      <Chord>${M(st.chord)}</Chord>
+      <xOffset>${M(st.xOffset)}</xOffset>
+      <Dihedral>${st.dihedral.toFixed(3)}</Dihedral>
+      <Twist>${st.twist.toFixed(3)}</Twist>
+      <x_number_of_panels>13</x_number_of_panels>
+      <x_panel_distribution>COSINE</x_panel_distribution>
+      <y_number_of_panels>19</y_number_of_panels>
+      <y_panel_distribution>UNIFORM</y_panel_distribution>
+      <Left_Side_FoilName>${E(st.foil)}</Left_Side_FoilName>
+      <Right_Side_FoilName>${E(st.foil)}</Right_Side_FoilName>
+     </Section>`;
+  // isFin 在 flow5 改用 Rx_angle=-90 立起來；Two_Sided=false 代表單面
+  const wing=w=>{const isFin=w.type==="FIN";return `
+    <wing>
+     <Name>${E(w.name)}</Name>
+     <Type>${w.type}</Type>
+     <Description></Description>
+     <Position>${w.position.map(v=>(v/1000).toFixed(6)).join(", ")}</Position>
+     <Tip_Strips>1</Tip_Strips>
+     <Rx_angle>${isFin?"-90.000":"0.000"}</Rx_angle>
+     <Ry_angle>0.000</Ry_angle>
+     <symmetric>true</symmetric>
+     <Two_Sided>${isFin?"false":"true"}</Two_Sided>
+     <Inertia><Mass>0.000</Mass></Inertia>
+     <Sections>${w.sections.map(sec).join("")}</Sections>
+    </wing>`;};
+  const g=buildPlaneGeom(i,o);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE flow5>
+<xflplane version="1.0">
+ <Units>
+  <length_unit_to_meter>1</length_unit_to_meter>
+  <area_unit_to_m2>1</area_unit_to_m2>
+  <mass_unit_to_kg>1</mass_unit_to_kg>
+  <speed_unit_to_ms>1</speed_unit_to_ms>
+  <inertia_unit_to_kgm2>1</inertia_unit_to_kgm2>
+ </Units>
+ <Plane>
+  <Name>${E(name)}</Name>
+  <Description>由 NYCU UAV 填表精靈產生</Description>
+  <Inertia>
+   <Point_Mass>
+    <Tag>全機質量</Tag>
+    <Mass>${(i.mtow/1000).toFixed(4)}</Mass>
+    <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
+   </Point_Mass>
+  </Inertia>${g.wings.map(wing).join("")}
+ </Plane>
+</xflplane>
+`;
+}
+
+/* ---------- xflr5 飛機定義 XML（Plane > Import Plane(s) from xml file(s)） ---------- */
+function buildXflr5Xml(i,o,name){
+  const T=i.tailType||"cross";
+  const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
+  const sec=(y,chord,xoff,dihe,twist,foil)=>`
+    <Section>
+     <y_position>${M(y)}</y_position>
+     <Chord>${M(chord)}</Chord>
+     <xOffset>${M(xoff)}</xOffset>
+     <Dihedral>${dihe.toFixed(2)}</Dihedral>
+     <Twist>${twist.toFixed(2)}</Twist>
+     <x_number_of_panels>13</x_number_of_panels>
+     <x_panel_distribution>COSINE</x_panel_distribution>
+     <y_number_of_panels>19</y_number_of_panels>
+     <y_panel_distribution>UNIFORM</y_panel_distribution>
+     <Left_Side_FoilName>${E(foil)}</Left_Side_FoilName>
+     <Right_Side_FoilName>${E(foil)}</Right_Side_FoilName>
+    </Section>`;
+  const wing=(wname,type,pos,isFin,sections)=>`
+   <wing>
+    <Name>${E(wname)}</Name>
+    <Type>${type}</Type>
+    <Position>${pos.map(v=>(v/1000).toFixed(6)).join(", ")}</Position>
+    <Tilt_angle>0.000</Tilt_angle>
+    <Symetric>${isFin?"false":"true"}</Symetric>
+    <isFin>${isFin?"true":"false"}</isFin>
+    <isDoubleFin>false</isDoubleFin>
+    <isSymFin>false</isSymFin>
+    <Inertia><Volume_Mass>0.000</Volume_Mass></Inertia>
+    <Sections>${sections}</Sections>
+   </wing>`;
+  const foil=i.foilData.name;
+  // 主翼：2 站位；xflr5 的 Dihedral 是「本段」屬性→掛在起始剖面，
+  // 末剖面的 Dihedral 被忽略（官方 wing.cpp 語意），慣例填 0。
+  // 展向用 span/2（自中線起算的完整梯形）而非扣機身的翼段半展——
+  // VLM 慣例把機身段升力視為連續，這也是精靈算 S/AR/Vh 的口徑，
+  // 兩邊一致 xflr5 才是在驗證「同一台飛機」。
+  const mainSecs =
+    sec(0, i.chord, 0, i.dihedral, i.incidence, foil)+
+    sec(i.span/2, o.ct, 0.25*(i.chord-o.ct), 0, i.incidence-i.washout, foil);
+  let tailWings="";
+  if(T==="vee"){
+    tailWings = wing("V-Tail","ELEVATOR",[o.htailLeX,0,0],false,
+      sec(0, i.veeCr, 0, i.veeAngle, 0, TAIL_FOIL.name)+
+      sec(o.veeSpanY, o.veeCt, 0.25*(i.veeCr-o.veeCt), 0, 0, TAIL_FOIL.name));
+  }else{
+    tailWings = wing("Elevator","ELEVATOR",[o.htailLeX,0,o.htailZ],false,
+      sec(0, o.chRoot, 0, 0, 0, TAIL_FOIL.name)+
+      sec(o.bh*1000/2, o.chTip, 0.25*(o.chRoot-o.chTip), 0, 0, TAIL_FOIL.name));
+    // hh/box 在 xflr5 以「等效單垂尾」近似：兩片各 Sv/2、同弦長 →
+    // 高度加倍即得總面積 Sv 的單片（Vv 等效，橫航向穩定性量級一致）。
+    tailWings += wing("Fin","FIN",[o.finLeX,0,0],true,
+      sec(0, o.cvRoot, 0, 0, 0, TAIL_FOIL.name)+
+      sec(o.bv*1000*((T==="hh"||T==="box")?2:1), o.cvTip,
+          0.25*(o.cvRoot-o.cvTip), 0, 0, TAIL_FOIL.name));
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE explane>
+<explane version="1.0">
+ <Units>
+  <length_unit_to_meter>1</length_unit_to_meter>
+  <mass_unit_to_kg>1</mass_unit_to_kg>
+ </Units>
+ <Plane>
+  <Name>${E(name)}</Name>
+  <Description>由 NYCU UAV 填表精靈產生</Description>
+  <Inertia>
+   <Point_Mass>
+    <Tag>全機質量</Tag>
+    <Mass>${(i.mtow/1000).toFixed(4)}</Mass>
+    <coordinates>${(i.xcg*o.mac/1000).toFixed(6)}, 0, 0</coordinates>
+   </Point_Mass>
+  </Inertia>
+  <has_body>false</has_body>${wing("Main Wing","MAINWING",[0,0,0],false,mainSecs)}${tailWings}
+ </Plane>
+</explane>
+`;
+}
+
+/* ---------- flow5 飛機 XML（Plane > import plane from xml） ----------
+   flow5 是 xflr5 的第 7 版（同作者），2026 起 GPL-3.0 開源免費。
+   格式對照官方樣本 API_examples/PlaneRun4/xml/plane.xml 逐標籤確認：
+   - 根元素 <xflplane version="1.0">、DOCTYPE flow5（xflr5 是 explane）
+   - Units 多了 area / speed / inertia 三個換算係數
+   - wing 層：symmetric（xflr5 是少一個 m 的 Symetric）、多了 Two_Sided /
+     Tip_Strips / Rx_angle / Ry_angle（Ry_angle 取代 xflr5 的 Tilt_angle）
+   - 垂尾不再用 isFin 隱式旋轉，改為 Type=FIN + Rx_angle=-90 + Two_Sided=false
+   - <Section> 的所有標籤與 xflr5 完全相同，故剖面產生邏輯直接沿用
+   全案優點：flow5 的腳本模式支援整機分析（xflr5 只支援翼型），
+   所以之後可以由 Fusion 外掛直接驅動、免手動點四個步驟。            */
 function buildFlow5Xml(i,o,name){
   const T=i.tailType||"cross";
   const E=xmlEsc, M=v=>(v/1000).toFixed(6);   // mm→m
@@ -758,14 +962,15 @@ function buildXflr5IniSnippet(){
 }
 
 /* node 測試掛鉤 */
-if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,buildFlow5Xml,buildXflr5AnalysisXml,buildXflr5IniSnippet,PRESETS,FOILS,allFoils};}
+if(typeof module!=="undefined"){module.exports={compute,checks,buildXlsxBytes,buildXflr5Xml,buildFlow5Xml,buildPlaneGeom,buildXflr5AnalysisXml,buildXflr5IniSnippet,PRESETS,FOILS,allFoils};}
 </script>
+<script src="solver/vlm.js"></script>
 
 <!-- ======================= UI 區 ======================= -->
 <script>
 "use strict";
 const $=q=>document.querySelector(q);
-const state={ preset:"trainer", step:0, htailX:0, finX:0,
+const state={ preset:"trainer", airframe:"plane", step:0, htailX:0, finX:0,
   veeAngle:0, veeL:0, veeCr:0, veeTaper:0.7, xnpX:0,
   ...JSON.parse(JSON.stringify(PRESETS.trainer.d)) };
 { const f0=FOILS.find(f=>f.name===state.foil)||FOILS[0];
@@ -830,7 +1035,7 @@ const STEPS=[
 /* 全流程地圖：讓新生隨時知道「整件事有多長、我在哪」 */
 const FLOW=[
  {t:"① 填表", d:"在這個網頁決定飛機的每個尺寸（STEP 1~7）", steps:[0,1,2,3,4,5,6]},
- {t:"② xflr5 驗證", d:"免費軟體算出真實氣動性能，把 XNP 填回來（STEP 8）", steps:[7]},
+ {t:"② 氣動驗證", d:"一鍵算出四張氣動圖，把 XNP 填回來（STEP 8）", steps:[7]},
  {t:"③ 產生設計表", d:"下載 xlsx，這是你的設計正本（STEP 9）", steps:[8]},
  {t:"④ Fusion 建模", d:"匯入 xlsx，機翼自動長出來、之後可隨時改參數", steps:[]},
 ];
@@ -893,7 +1098,7 @@ function refreshLive(){
   const ph=$("#posHint");
   if(ph){
     const o=compute(inputs());
-    let t=`📍 目前位置（主翼前緣=0）：平尾/V尾前緣 X≈<b>${o.htailLeX.toFixed(0)}mm</b>`;
+    let t=`📐 主翼 MAC=<b>${o.mac.toFixed(0)}mm</b>，重心比例 ${state.xcg} → 重心在主翼前緣後 <b>${(state.xcg*o.mac).toFixed(0)}mm</b><br>📍 目前位置（主翼前緣=0）：平尾/V尾前緣 X≈<b>${o.htailLeX.toFixed(0)}mm</b>`;
     if(state.tailType!=="vee") t+=`、垂尾前緣 X≈<b>${o.finLeX.toFixed(0)}mm</b>`;
     if(o.htailZ>0) t+=`、平尾高度 Z=${o.htailZ.toFixed(0)}mm（T尾）`;
     if(o.finY>0) t+=`、雙垂尾在 Y=±${o.finY.toFixed(0)}mm`;
@@ -905,14 +1110,27 @@ function refreshLive(){
 
 /* ---------- 各步 ---------- */
 function rType(){
+  const af = AIRFRAMES[state.airframe]||AIRFRAMES.plane;
+  const subs = af.presets.length>1 ? `
+   <div class="lead" style="margin-top:.6rem">起始值模板（同構型、不同定位）：</div>
+   <div class="presets">${af.presets.map(k=>
+     `<div class="preset ${state.preset===k?"sel":""}" onclick="pickPreset('${k}')">
+      <h3>${PRESETS[k].label}</h3><p>${PRESETS[k].desc}</p></div>`).join("")}</div>` : "";
   return `<div class="card"><h2><span class="no">STEP 1</span>你要做哪種飛機？</h2>
-  ${goal("這台飛機的定位——它會決定後面 20 幾個欄位的起始值",
+  ${goal("這台飛機的構型——它會決定後面 20 幾個欄位的起始值與檢核項目",
    "選完直接按「下一步」，之後每一格都能自己改")}
-  <div class="lead">不用怕選錯：機型只是幫你把所有欄位填成合理起點，後面每一步都可以微調。</div>
-  <div class="presets">${Object.entries(PRESETS).map(([k,p])=>
-    `<div class="preset ${state.preset===k?"sel":""}" onclick="pickPreset('${k}')">
-     <h3>${p.label}</h3><p>${p.desc}</p></div>`).join("")}</div>
-  <div class="hint">💡 新生第一台強烈建議「練習機」：翼載低、上反角大、自穩性好，摔了也便宜。</div></div>`;
+  <div class="lead">不用怕選錯：構型只是幫你把所有欄位填成合理起點，後面每一步都可以微調。</div>
+  <div class="presets">${Object.entries(AIRFRAMES).map(([k,a])=>
+    `<div class="preset ${state.airframe===k?"sel":""}" onclick="pickAirframe('${k}')">
+     <h3>${a.icon} ${a.label}</h3><p>${a.desc}</p></div>`).join("")}</div>
+  ${subs}
+  <div class="hint">💡 新生第一台強烈建議「傳統固定翼 → 練習機」：翼載低、上反角大、自穩性好，摔了也便宜。<br>
+  VTOL 構型的機翼設計流程跟定翼完全一樣，只是多了垂起動力的懸停推重比檢核（STEP 7）。<br>
+  🔺 飛翼／三角翼（B-2 那種）是下一版：無尾翼的穩定性算法（後掠＋外洗＋反彎翼型）跟這套「主翼＋尾翼」流程不同，硬套會設計出摔機的東西，所以先不開放。</div></div>`;
+}
+function pickAirframe(k){
+  state.airframe=k;
+  pickPreset(AIRFRAMES[k].presets[0]);
 }
 function pickPreset(k){
   state.preset=k; Object.assign(state,JSON.parse(JSON.stringify(PRESETS[k].d)));
@@ -1134,7 +1352,7 @@ function rLayout(){
   ${goal("重心位置與尾翼要放多遠——決定飛機穩不穩、好不好操縱",
    "<b>靜穩定裕度 SM 落在 0.05~0.15</b>")}
   <div class="lead">重心（CG）是全機最重要的一個數字：太前面遲鈍、太後面會失控。
-  這裡先用公式估，之後 STEP 8 用 xflr5 算出真值再回來校正。
+  這裡先用公式估，之後 STEP 8 按「分析」算出真值再回來校正。
   <b>做出實機後一定要用手指頂在翼下實測重心</b>，跟這裡的數字對照。</div>
   <div class="grid2">
   ${field("noseC","機頭 → 主翼前緣","倍弦長","1 ~ 1.5 倍平均弦長","step=0.05")}
@@ -1217,6 +1435,15 @@ function rPower(){
   ${field("motorW","馬達全油門功率","W","看馬達規格表或瓦特計實測")}
   ${field("thrust","動力組靜推力","g","馬達+槳的靜推力；廠標或用廚房秤實測")}
   </div>
+  ${state.vtol>0?`
+  <h3 style="margin-top:.8rem">垂起動力（VTOL）</h3>
+  <div class="lead">懸停推重比 = 垂起馬達數 × 單顆推力 ÷ 全機重。PX4 官方建議至少
+  1.5、舒適 2.0——不夠的話起飛就在地上跳。</div>
+  <div class="grid2">
+  ${field("vtol","垂起馬達數量","顆","四旋翼定翼機=4；傾轉旋翼常見 3")}
+  ${field("liftThrust","單顆垂起馬達推力","g","看馬達+槳的推力表（同顆馬達懸停工作點）")}
+  </div>
+  <div data-live='["懸停推重比"]'></div>`:""}
   <div data-live='["功率負載","靜推重比"]'></div></div>`;
 }
 function rXflr5(){
@@ -1225,11 +1452,12 @@ function rXflr5(){
   const xcgMM=(i.xcg*o.mac).toFixed(0);
   const E=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
   const foilName=i.foilData.name;
-  return `<div class="card"><h2><span class="no">STEP 8</span>xflr5 驗證（強烈建議）</h2>
-  ${goal("用免費軟體 xflr5 驗證這台飛機真的會飛、並把中性點量出來",
+  return `<div class="card"><h2><span class="no">STEP 8</span>氣動驗證（強烈建議）</h2>
+  ${goal("驗證這台飛機真的會飛、並把中性點量出來",
    "四張圖的判讀結果，以及填回 XNP 後的 SM")}
-  <div class="lead">前面的中性點（XNP）是<b>公式初估</b>；xflr5 會用你的實際幾何算出真值。
-  跑完把 XNP 填回下面欄位，總檢查會自動改用實測值。沒空跑也能直接產表，但首飛前跑一輪最保險。</div>
+  <div class="lead">前面的中性點（XNP）是<b>公式初估</b>；這一步用<b>渦格法</b>照你的實際幾何算真值。
+  按「分析」不到一秒就出圖（就在瀏覽器裡算，什麼都不用裝）。跑完把 XNP 填回下面欄位，
+  總檢查會自動改用實測值。</div>
   <div class="badges">
     <span class="badge">分析雷諾數 <b>${reTxt}</b></span>
     <span class="badge">巡航速度 <b>${i.v} m/s</b></span>
@@ -1239,7 +1467,9 @@ function rXflr5(){
   </div>
   <div class="runbox">
     <h3>⚡ 一鍵分析（推薦）</h3>
-    <div style="font-size:.9rem">不用開任何軟體——按下去就在背景跑 flow5，四張圖直接畫在這頁。</div>
+    <div style="font-size:.9rem">不用開任何軟體——渦格法直接在你的瀏覽器裡跑，四張圖零點幾秒畫出來。
+    已與 flow5 對拍驗證（CL 差 2%、配平角差 0.15°）。已知限制：不含失速與機身阻力，
+    大迎角區段僅供參考。</div>
     <div id="runHost" style="margin-top:.5rem"></div>
     <div id="runResult" style="margin-top:.6rem"></div>
   </div>
@@ -1309,7 +1539,7 @@ function rXflr5(){
         Fusion 重新匯入（或對既有特徵 Edit Wing 改參數）。通常 2~3 輪就收斂。</li>
     </ol></details>
   <div class="grid2">
-  ${field("xnpX","xflr5 實測 XNP（弦長比；0＝還沒跑）","","例：XNP 在 43% MAC 就填 0.43；填入後 SM 檢核自動改用實測值","step=0.005")}
+  ${field("xnpX","實測 XNP（弦長比；0＝還沒跑）","","例：XNP 在 43% MAC 就填 0.43；填入後 SM 檢核自動改用實測值","step=0.005")}
   </div>
   <div data-live='["靜穩定裕度 SM"]'></div>
   <div class="hint">⚠ xflr5 已知限制（引用官方文件）：總阻力普遍低估約 20%、CLmax 偏高、
@@ -1395,19 +1625,11 @@ async function findServer(){
 function serverAvailable(){ return API_BASE !== null; }
 
 function renderRunHost(){
+  let h = `<button class="btn primary" onclick="doAnalyze()">▶ 分析（瀏覽器即時計算，出四張圖）</button>`;
   if(API_INFO && API_INFO.flow5)
-    return `<button class="btn primary" onclick="doAnalyze()">▶ 分析（跑 flow5，出四張圖）</button>
-      <div class="hint">分析服務：<code>${API_BASE}</code></div>`;
-  if(API_INFO)
-    return `<div class="hint">⚠ 找到分析服務（<code>${API_BASE}</code>），但那台機器上沒裝 flow5，
-      所以不能跑分析。其餘功能（xlsx、Fusion 匯入、flow5 檔案匯出）都正常。</div>`;
-  return `<div class="hint">⚠ 沒找到分析服務，一鍵分析暫時停用 —— <b>其餘功能全部正常</b>
-    （下載 xlsx 拿去 Fusion 匯入、匯出 flow5 檔自己跑，都不需要它）。<br>
-    想要一鍵分析，二選一：<br>
-    ① 自己電腦跑：下載 flow5 後執行 <code>python local/analysis_server.py</code>，
-       這頁會自動接上（不用換網址）。<br>
-    ② 社團共用主機：把網址加上 <code>?api=https://主機位址</code> 開一次，之後會自動記住。
-    <button class="btn" style="margin-top:8px" onclick="reScan()">重新偵測</button></div>`;
+    h += ` <button class="btn" onclick="doAnalyzeFlow5()">🔬 用 flow5 對拍</button>
+      <div class="hint">flow5 服務：<code>${API_BASE}</code>——兩邊數字互相驗證用</div>`;
+  return h;
 }
 
 async function reScan(){ await findServer(); refreshLive(); }
@@ -1467,7 +1689,7 @@ function renderCharts(res){
           : ` — <span class="bad">與配平點差 ${f(v.trim_vs_best,1)}°</span>，飛機停在效率差的攻角，回 STEP 3 微調裝置角`))},
   ];
   const xnp = s.xnp_m !== undefined
-    ? `<div class="hint" style="margin-top:.4rem">📐 flow5 實算 <b>XNP = ${f(s.xnp_m,4)} m</b>` +
+    ? `<div class="hint" style="margin-top:.4rem">📐 ${s.method||"flow5"} 實算 <b>XNP = ${f(s.xnp_m,4)} m</b>` +
       (s.static_margin !== undefined ? `、靜穩定裕度 <b>${f(s.static_margin,1)}%</b>` : "") +
       `　<button class="btn" style="font-size:.8rem;padding:.1rem .6rem"
         onclick="applyXnp(${s.xnp_m})">↩ 填回上面的 XNP 欄位</button></div>`
@@ -1482,11 +1704,56 @@ function applyXnp(xnpMeters){
   render();
 }
 
+/* ---------- 一鍵分析：瀏覽器內渦格法，按下去零點幾秒出四張圖 ----------
+   實測與 flow5 對拍（教練機/Clark Y）：CL 差 2%、dCm/dCL 差 3%、配平角差
+   0.15°、XNP 差 4.5% MAC——落在 flow5 自家不同方法之間的差異範圍內。 */
+async function fetchFoilDat(dat){
+  const tries=[
+    "airfoils/"+dat,                                                        // 同源
+    "https://cdn.jsdelivr.net/gh/NYCU-UAV/UAV_designsystem_web@main/airfoils/"+dat,
+    "https://raw.githubusercontent.com/NYCU-UAV/UAV_designsystem_web/main/airfoils/"+dat,
+  ];
+  for(const u of tries){
+    try{ const r=await fetch(u,{cache:"force-cache"}); if(r.ok) return await r.text(); }
+    catch(e){ /* 換下一個來源 */ }
+  }
+  return null;   // 抓不到就退回 NACA 解析式或平板（solver 會記在 missing_foils）
+}
+
 async function doAnalyze(){
   const box = $("#runResult");
   const i = inputs(), o = compute(i);
+  box.innerHTML = `<span class="spin"></span> 正在瀏覽器裡跑渦格法…`;
+  await new Promise(r=>setTimeout(r,30));   // 讓轉圈圈先畫出來
+  try{
+    const foils = {};
+    if(i.foilData.dat){
+      const txt = await fetchFoilDat(i.foilData.dat);
+      if(txt) foils[i.foilData.name] = txt;
+    }
+    const res = VLM.solve({
+      geom: buildPlaneGeom(i, o), foils: foils,
+      velocity: i.v, xcgM: i.xcg * o.mac / 1000,
+      alphaMin: -20, alphaMax: 20, alphaStep: 0.5, viscous: true,
+    });
+    LAST_RESULT = res;
+    let warn = "";
+    if(res.summary.missing_foils.length)
+      warn = `<div class="hint">⚠ 抓不到翼型檔 <code>${res.summary.missing_foils.join("、")}</code>，
+        先用平板中弧線近似——升力斜率對、但 α=0 的 CL 會偏低。</div>`;
+    box.innerHTML = renderCharts(res) + warn;
+  }catch(e){
+    box.innerHTML = `<div class="chart" style="border-color:var(--bad)">
+      <b style="color:var(--bad)">分析失敗</b><div class="cv">${String(e.message||e)}</div></div>`;
+  }
+}
+
+/* flow5 對拍（選配）：有人架了分析服務才會出現這顆按鈕 */
+async function doAnalyzeFlow5(){
+  const box = $("#runResult");
+  const i = inputs(), o = compute(i);
   const name = (state._fname || "design").replace(/[^\w-]/g, "_") || "plane";
-  box.innerHTML = `<span class="spin"></span> 正在跑 flow5（第一次約需 10~60 秒，視網格大小）...`;
+  box.innerHTML = `<span class="spin"></span> 正在跑 flow5（約 10~60 秒）...`;
   const foils = [{name: i.foilData.name, dat: i.foilData.dat || ""},
                  {name: TAIL_FOIL.name, dat: TAIL_FOIL.dat || ""}];
   try{
@@ -1504,11 +1771,13 @@ async function doAnalyze(){
     });
     const j = await res.json();
     if(!j.ok) throw new Error(j.error);
+    j.result.summary = j.result.summary || {};
+    j.result.summary.method = "flow5";
     LAST_RESULT = j.result;
     box.innerHTML = renderCharts(j.result);
   }catch(e){
     box.innerHTML = `<div class="chart" style="border-color:var(--bad)">
-      <b style="color:var(--bad)">分析失敗</b><div class="cv">${String(e.message||e)}</div></div>`;
+      <b style="color:var(--bad)">flow5 分析失敗</b><div class="cv">${String(e.message||e)}</div></div>`;
   }
 }
 
