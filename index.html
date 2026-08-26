@@ -425,8 +425,10 @@ function checks(i,o){
   c.push([o.clreq<=i.foilData.clCruise?"ok":"bad","巡航需求 CL",fmt(o.clreq,3),
     o.clreq<=i.foilData.clCruise?"翼型巡航 CL "+i.foilData.clCruise+" 夠用"
     :"超過翼型巡航 CL "+i.foilData.clCruise+"——加大機翼、減重或飛快一點"]);
-  c.push([o.margin>=1.3?"ok":"bad","巡航速度餘裕 V/Vs",fmt(o.margin),
-    o.margin>=1.3?"離失速夠遠（≥1.3）":"太貼近失速速度！加大機翼或減重"]);
+  c.push(!isFinite(o.margin)
+    ? ["bad","巡航速度餘裕 V/Vs","—","重量或機翼面積是 0，算不出失速速度——先把上面的欄位填齊"]
+    : [o.margin>=1.3?"ok":"bad","巡航速度餘裕 V/Vs",fmt(o.margin),
+       o.margin>=1.3?"離失速夠遠（≥1.3）":"太貼近失速速度！加大機翼或減重"]);
   c.push([o.re>=100000?"ok":o.re>=50000?"warn":"bad","巡航雷諾數",Math.round(o.re).toLocaleString(),
     o.re>=100000?"翼型正常工作區":o.re>=50000?"過渡帶：務必用低雷諾數翼型（SD7037 系）":"低於臨界帶（4~5萬）：翼弦太短或飛太慢，CLmax 會崩"]);
   if(o.lh<=30||o.lv<=30){
