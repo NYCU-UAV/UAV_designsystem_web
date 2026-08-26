@@ -1891,8 +1891,11 @@ function renderCharts(res){
     <div class="chart flowbox"><h4>🌬 流場切面（對稱面 y=0）——由上面同一組渦格解直接積分，不是示意圖</h4>
       <svg id="flowSvg" viewBox="0 0 640 300"></svg>
       <div class="cv" style="margin-top:.35rem">攻角 α
-        <input type="range" id="flowA" min="-5" max="15" step="1" value="2"
-          oninput="drawFlow(+this.value)">
+        <input type="range" id="flowA" min="-5" max="15" step="any" value="2"
+          oninput="drawFlow(Math.round(+this.value))">
+        <label style="margin-left:.5rem;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="flowCruise" onchange="flowCruiseToggle(this.checked)">
+          🔒 巡航攻角</label>
         <span id="flowInfo"></span>
         <div style="margin-top:.2rem">翼前上洗、翼後下洗、尾翼泡在下洗流裡；打在翼面上的流線截止於駐點——
         拖滑桿看攻角怎麼改變整個流場。</div></div>
@@ -1930,6 +1933,36 @@ function drawFlow(alpha){
   $("#flowInfo").innerHTML =
     ` <b>α=${alpha}°</b>　CL=${pt.CL.toFixed(3)}　Cm=${pt.Cm.toFixed(4)}　L/D=${pt.CLCD.toFixed(1)}`;
   const fa = $("#flowA"); if(fa && +fa.value!==alpha) fa.value = alpha;
+}
+
+/* 巡航攻角＝平飛時 CL 恰好等於「巡航需求 CL」的攻角，從四張圖同一組
+   資料點內插；找不到（需求 CL 超出掃描範圍）就退用配平攻角。 */
+function cruiseAlpha(){
+  const i = inputs(), o = compute(i);
+  const pts = (LAST_RESULT && LAST_RESULT.points) || [];
+  for(let k = 0; k < pts.length - 1; k++){
+    const a = pts[k], b = pts[k+1];
+    if((a.CL - o.clreq) * (b.CL - o.clreq) <= 0 && a.CL !== b.CL){
+      return { a: a.alpha + (b.alpha - a.alpha) * (o.clreq - a.CL) / (b.CL - a.CL),
+               clreq: o.clreq, fallback: false };
+    }
+  }
+  const t = LAST_RESULT && LAST_RESULT.verdict && LAST_RESULT.verdict.trim_alpha;
+  return { a: (t === null || t === undefined) ? 2 : t, clreq: o.clreq, fallback: true };
+}
+
+function flowCruiseToggle(on){
+  const fa = $("#flowA");
+  if(on){
+    const c = cruiseAlpha();
+    fa.disabled = true;
+    drawFlow(+c.a.toFixed(1));
+    $("#flowInfo").innerHTML += c.fallback
+      ? `　<span style="color:var(--bad)">（需求 CL 超出掃描範圍，改用配平攻角）</span>`
+      : `　<b style="color:var(--ok)">＝巡航狀態（CL=需求 ${c.clreq.toFixed(3)}）</b>`;
+  }else{
+    fa.disabled = false;
+  }
 }
 
 function initFlowPanel(){
