@@ -549,23 +549,57 @@
       }
       return false;
     }
+    // 推回表面：找最近的多邊形邊、投影上去、再沿外法線推出 eps。
+    // VLM 是零厚度中弧面解，厚度排擠不在解裡——貼著表面的流線「鑽進
+    // 外形」是模型固有現象，正確的視覺化是滑移貼體，不是砍線
+    //（第一版砍線把緊貼上表面那條整條吃掉，實機截圖抓包）。
+    var eps = 0.0018 * L;
+    function pushOut(x, z) {
+      var best = null, bd = 1e9;
+      for (var si = 0; si < solids.length; si++) {
+        var pg = solids[si].pts;
+        for (var a2 = 0; a2 < pg.length - 1; a2++) {
+          var ax = pg[a2][0], az = pg[a2][1], bx = pg[a2 + 1][0], bz = pg[a2 + 1][1];
+          var dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+          var t = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+          var qx = ax + t * dx, qz = az + t * dz;
+          var d2 = (x - qx) * (x - qx) + (z - qz) * (z - qz);
+          if (d2 < bd) { bd = d2; best = [qx, qz, dx, dz]; }
+        }
+      }
+      if (!best) return [x, z];
+      // 邊的左法線；推出去之後還在裡面就改推另一側
+      var nl = Math.hypot(best[2], best[3]) || 1;
+      var nx = -best[3] / nl, nz = best[2] / nl;
+      var ox = best[0] + nx * eps, oz = best[1] + nz * eps;
+      if (inside(ox, oz)) { ox = best[0] - nx * eps; oz = best[1] - nz * eps; }
+      return [ox, oz];
+    }
     var lines = [];
     for (var s = 0; s < nL; s++) {
       var z = zLo + (zHi - zLo) * s / (nL - 1);
-      var p = [x0, ySlice, z], line = [[p[0], p[2]]];
-      for (var st = 0; st < 500 && p[0] < x1; st++) {
+      var p = [x0, ySlice, z];
+      var line = [[p[0], p[2], 1]];            // 第三欄＝|V|/V∞（上色用）
+      var stag = false, slides = 0;
+      for (var st = 0; st < 700 && p[0] < x1; st++) {
         var v1 = velocityAt(M, G, Vinf, p);
         v1[1] = 0;                             // 投影回切面（切面流線的標準做法）
-        var sp1 = norm(v1); if (sp1 < 1e-6) break;
+        var sp1 = norm(v1); if (sp1 < 1e-6) { stag = true; break; }
         var mid = add(p, mul(v1, ds / sp1 * 0.5));
         var v2 = velocityAt(M, G, Vinf, mid);
         v2[1] = 0;
-        var sp2 = norm(v2); if (sp2 < 1e-6) break;
+        var sp2 = norm(v2); if (sp2 < 1e-6) { stag = true; break; }
         p = add(p, mul(v2, ds / sp2));
-        if (inside(p[0], p[2])) break;         // 撞上翼面＝駐點，截止
-        line.push([p[0], p[2]]);
+        if (inside(p[0], p[2])) {
+          var q = pushOut(p[0], p[2]);         // 滑移貼體，不砍線
+          p[0] = q[0]; p[2] = q[1];
+          if (++slides > 60) { stag = true; break; }   // 一直被吸回去＝駐點
+        } else {
+          slides = 0;
+        }
+        line.push([p[0], p[2], sp2 / M.V]);
       }
-      lines.push(line);
+      lines.push({ pts: line, stag: stag });
     }
     return { lines: lines, point: { alpha: pt.alpha, CL: pt.CL, Cm: pt.Cm, CLCD: pt.CLCD },
              box: { x0: x0, x1: x1, z0: zLo, z1: zHi } };
