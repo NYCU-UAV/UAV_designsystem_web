@@ -114,13 +114,22 @@ h1{font-size:1.45rem;letter-spacing:.08em}
 .flowscale{stroke:#6b6353;stroke-width:2}
 .flowbox input[type=range]{width:12rem;vertical-align:middle}
 .projbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:.3rem 0 .5rem;
-  font-size:.92rem;color:var(--ink2)}
+  font-size:1rem;color:var(--ink2)}
 .projbar b{color:var(--ink)}
 #projPanel{border:1.5px solid var(--line);border-radius:.6rem;background:#fffdf6;
   padding:.8rem;margin-bottom:.7rem}
-#projPanel h3{margin:.2rem 0 .4rem;font-size:1rem}
-#projPanel table{width:100%;border-collapse:collapse;font-size:.88rem}
-#projPanel td,#projPanel th{padding:.25rem .5rem;border-bottom:1px solid var(--line);text-align:left}
+#projPanel h3{margin:.2rem 0 .4rem;font-size:1.1rem}
+#projPanel input[type=text]{font-size:1rem}
+.pmodal{position:fixed;inset:0;background:rgba(40,35,25,.6);z-index:100;
+  display:flex;align-items:center;justify-content:center;padding:1rem}
+.pmodal-card{background:var(--card);border:2px solid var(--ink);border-radius:.7rem;
+  padding:1.2rem 1.4rem;max-width:26rem;width:100%;box-shadow:.3rem .3rem 0 rgba(51,48,42,.3)}
+.pmodal-card h3{color:var(--bad);margin-bottom:.5rem}
+.pmodal-card p{margin:.3rem 0;color:var(--ink2)}
+.pmodal-card input{width:100%;padding:.45rem .6rem;border:2px solid var(--bad);
+  border-radius:.45rem;font:inherit;letter-spacing:.15em;margin-top:.3rem}
+#projPanel table{width:100%;border-collapse:collapse;font-size:.98rem}
+#projPanel td,#projPanel th{padding:.4rem .55rem;border-bottom:1px solid var(--line);text-align:left}
 #projPanel tr.sel{background:#f6efdd}
 #projPanel input[type=text]{padding:.3rem .5rem;border:1.5px solid var(--line);border-radius:.4rem}
 .runbox{border:2px solid var(--blue);border-radius:.55rem;background:#eef2f6;
@@ -1618,10 +1627,10 @@ let LAST_RESULT = null, LAST_MODEL = null;
    做相似機，全社團共用。API 沒接資料庫時按鈕仍在，會顯示設定教學。 */
 let PROJ = { slug:null, name:null, ver:null };
 
-async function api(path, body){
-  const r = await fetch(path, body===undefined ? {} : {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify(body)});
+async function api(path, body, method){
+  const r = await fetch(path, body===undefined && !method ? {} : {
+    method: method || "POST", headers:{"Content-Type":"application/json"},
+    body: body===undefined ? undefined : JSON.stringify(body)});
   let j; try{ j = await r.json(); }catch(e){ j = {ok:false, error:"HTTP "+r.status}; }
   if(!j.ok) throw new Error(j.hint || j.error || ("HTTP "+r.status));
   return j;
@@ -1694,9 +1703,12 @@ async function projShow(slug){
       <td>${new Date(v.created_at).toLocaleString()}</td>
       <td><button class="btn" onclick="projLoad('${slug}',${v.num})">載入</button>
           <button class="btn" onclick="projClone('${slug}',${v.num})">clone 成新專案</button></td></tr>`).join("");
+    const delBtn = `<button class="btn" style="border-color:var(--bad);color:var(--bad)"
+      onclick="projDelete('${slug}','${(j.project.name||"").replace(/'/g,"")}')">🗑 刪除整個專案</button>`;
     box.innerHTML = `<h3 style="margin-top:.7rem">📂 ${j.project.name}
       <small style="color:var(--ink2)">負責人 ${j.project.owner||"—"}</small></h3>
-      <table><tr><th>版本</th><th>作者</th><th>說明</th><th>摘要</th><th>時間</th><th></th></tr>${rows}</table>`;
+      <table><tr><th>版本</th><th>作者</th><th>說明</th><th>摘要</th><th>時間</th><th></th></tr>${rows}</table>
+      <div style="margin-top:.5rem;text-align:right">${delBtn}</div>`;
   }catch(e){ box.innerHTML = `<div class="hint">⚠ ${String(e.message||e)}</div>`; }
 }
 
@@ -1724,6 +1736,43 @@ async function projClone(slug, num){
     PROJ = {slug: jj.project.slug, name: jj.project.name, ver: 1};
     projPanelToggle(false); renderProjBar();
   }catch(e){ alert("clone 失敗："+(e.message||e)); }
+}
+
+/* 刪除專案：跳確認視窗，必須手打 DELETE 才能按下確認（不可復原）。 */
+function projDelete(slug, name){
+  const ov = document.createElement("div");
+  ov.className = "pmodal";
+  ov.innerHTML = `<div class="pmodal-card">
+    <h3>⚠ 刪除專案「${name}」</h3>
+    <p>會刪掉<b>所有版本的歷史</b>，這個動作<b>無法復原</b>。</p>
+    <p>要繼續，請在下面輸入 <code>DELETE</code>：</p>
+    <input type="text" id="delConfirm" autocomplete="off" placeholder="DELETE">
+    <div style="margin-top:.8rem;display:flex;gap:.6rem;justify-content:flex-end">
+      <button class="btn" id="delCancel">取消</button>
+      <button class="btn" id="delGo" disabled
+        style="border-color:var(--bad);color:#fff;background:var(--bad);opacity:.4">確認刪除</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const inp = ov.querySelector("#delConfirm"), go = ov.querySelector("#delGo");
+  inp.focus();
+  inp.oninput = ()=>{
+    const ready = inp.value.trim() === "DELETE";
+    go.disabled = !ready;
+    go.style.opacity = ready ? "1" : ".4";
+  };
+  ov.querySelector("#delCancel").onclick = ()=>ov.remove();
+  ov.onclick = e=>{ if(e.target===ov) ov.remove(); };
+  go.onclick = async ()=>{
+    go.disabled = true; go.textContent = "刪除中…";
+    try{
+      await api("/api/project?slug="+encodeURIComponent(slug), undefined, "DELETE");
+      if(PROJ.slug === slug){ PROJ = {slug:null, name:null, ver:null}; renderProjBar(); }
+      ov.remove();
+      projPanelToggle(true);          // 重新整理清單
+    }catch(e){
+      go.textContent = "失敗："+String(e.message||e).slice(0,40);
+    }
+  };
 }
 
 async function projSave(){
@@ -1973,6 +2022,38 @@ function drawFlow(alpha){
   $("#flowInfo").innerHTML =
     ` <b>α=${alpha}°</b>　CL=${pt.CL.toFixed(3)}　Cm=${pt.Cm.toFixed(4)}　L/D=${pt.CLCD.toFixed(1)}`;
   const fa = $("#flowA"); if(fa && +fa.value!==alpha) fa.value = alpha;
+}
+
+/* 巡航攻角＝平飛時 CL 恰好等於「巡航需求 CL」的攻角，從四張圖同一組
+   資料點內插；找不到（需求 CL 超出掃描範圍）就退用配平攻角。
+   ⚠ 這兩個函式曾被 drawFlow 區間重寫誤刪（splice 事故）——現在 CI 檢查
+   會掃「HTML 引用的 handler 必有定義」，再被吃掉會直接紅燈。 */
+function cruiseAlpha(){
+  const i = inputs(), o = compute(i);
+  const pts = (LAST_RESULT && LAST_RESULT.points) || [];
+  for(let k = 0; k < pts.length - 1; k++){
+    const a = pts[k], b = pts[k+1];
+    if((a.CL - o.clreq) * (b.CL - o.clreq) <= 0 && a.CL !== b.CL){
+      return { a: a.alpha + (b.alpha - a.alpha) * (o.clreq - a.CL) / (b.CL - a.CL),
+               clreq: o.clreq, fallback: false };
+    }
+  }
+  const t = LAST_RESULT && LAST_RESULT.verdict && LAST_RESULT.verdict.trim_alpha;
+  return { a: (t === null || t === undefined) ? 2 : t, clreq: o.clreq, fallback: true };
+}
+
+function flowCruiseToggle(on){
+  const fa = $("#flowA");
+  if(on){
+    const c = cruiseAlpha();
+    fa.disabled = true;
+    drawFlow(+c.a.toFixed(1));
+    $("#flowInfo").innerHTML += c.fallback
+      ? `　<span style="color:var(--bad)">（需求 CL 超出掃描範圍，改用配平攻角）</span>`
+      : `　<b style="color:var(--ok)">＝巡航狀態（CL=需求 ${c.clreq.toFixed(3)}）</b>`;
+  }else{
+    fa.disabled = false;
+  }
 }
 
 function initFlowPanel(){

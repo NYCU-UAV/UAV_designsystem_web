@@ -45,6 +45,13 @@ module.exports = async (req, res) => {
       return;
     }
 
+    if (req.method === "DELETE") {
+      if (!writeAllowed(req)) { sendJson(res, 403, { ok: false, error: "bad_key" }); return; }
+      await sql`DELETE FROM projects WHERE id = ${proj.id}`;   // versions 由 FK CASCADE 清
+      sendJson(res, 200, { ok: true, deleted: proj.slug });
+      return;
+    }
+
     sendJson(res, 405, { ok: false, error: "method" });
   } catch (e) {
     sendJson(res, 500, { ok: false, error: String(e.message || e) });
